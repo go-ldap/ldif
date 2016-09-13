@@ -3,6 +3,10 @@ go:
     - 1.6
     - 1.7
     - tip
+matrix:
+    fast_finish: true
+    allow_failures:
+        - go: tip
 go_import_path: github.com/go-ldap/ldif
 install:
     - go get gopkg.in/asn1-ber.v1
