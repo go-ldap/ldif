@@ -3,7 +3,7 @@ package ldif_test
 import (
 	"testing"
 
-	"gopkg.in/ldap.v2/ldif"
+	"github.com/go-ldap/ldif"
 )
 
 var ldifRFC2849Example6 = `version: 1

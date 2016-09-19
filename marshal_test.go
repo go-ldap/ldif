@@ -3,7 +3,7 @@ package ldif_test
 import (
 	"bytes"
 	"gopkg.in/ldap.v2"
-	"gopkg.in/ldap.v2/ldif"
+	"github.com/go-ldap/ldif"
 	"testing"
 )
 
