@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ type LDIF struct {
 	changeType string
 	FoldWidth  int
 	Controls   bool
+	Logger     *log.Logger
 	firstEntry bool
 }
 

@@ -3,6 +3,7 @@ package ldif
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"gopkg.in/ldap.v2"
 )
@@ -10,12 +11,17 @@ import (
 // Apply sends the LDIF entries to the server and does the changes as
 // given by the entries.
 //
-// All *ldap.Entry are converted to an *ldap.AddRequest.
+// All *ldap.Entry are converted to an *ldap.AddRequest, NOTE: this
+// modifies the *LDIF...
 //
 // By default, it returns on the first error. To continue with applying the
 // LDIF, set the continueOnErr argument to true - in this case the errors
 // are logged with log.Printf()
 func (l *LDIF) Apply(conn ldap.Client, continueOnErr bool) error {
+	if l.Logger == nil {
+		l.Logger = log.New(os.Stderr, "", log.Flags())
+		defer func() { l.Logger = nil }()
+	}
 	for _, entry := range l.Entries {
 		switch {
 		case entry.Entry != nil:
@@ -28,7 +34,7 @@ func (l *LDIF) Apply(conn ldap.Client, continueOnErr bool) error {
 		case entry.Add != nil:
 			if err := conn.Add(entry.Add); err != nil {
 				if continueOnErr {
-					log.Printf("ERROR: Failed to add %s: %s", entry.Add.DN, err)
+					l.Logger.Printf("ERROR: Failed to add %s: %s", entry.Add.DN, err)
 					continue
 				}
 				return fmt.Errorf("failed to add %s: %s", entry.Add.DN, err)
@@ -37,7 +43,7 @@ func (l *LDIF) Apply(conn ldap.Client, continueOnErr bool) error {
 		case entry.Del != nil:
 			if err := conn.Del(entry.Del); err != nil {
 				if continueOnErr {
-					log.Printf("ERROR: Failed to delete %s: %s", entry.Del.DN, err)
+					l.Logger.Printf("ERROR: Failed to delete %s: %s", entry.Del.DN, err)
 					continue
 				}
 				return fmt.Errorf("failed to delete %s: %s", entry.Del.DN, err)
@@ -46,7 +52,7 @@ func (l *LDIF) Apply(conn ldap.Client, continueOnErr bool) error {
 		case entry.Modify != nil:
 			if err := conn.Modify(entry.Modify); err != nil {
 				if continueOnErr {
-					log.Printf("ERROR: Failed to modify %s: %s", entry.Modify.DN, err)
+					l.Logger.Printf("ERROR: Failed to modify %s: %s", entry.Modify.DN, err)
 					continue
 				}
 				return fmt.Errorf("failed to modify %s: %s", entry.Modify.DN, err)

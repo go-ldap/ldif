@@ -17,7 +17,7 @@ var ErrMixed = errors.New("cannot mix change records and content records")
 // Marshal returns an LDIF string from the given LDIF.
 //
 // The default line lenght is 76 characters. This can be changed by setting
-// the fw parameter to something else than 0.
+// the FoldWidth struct member of the *LDIF to something else than 0.
 // For a fold width < 0, no folding will be done, with 0, the default is used.
 func Marshal(l *LDIF) (data string, err error) {
 	hasEntry := false
@@ -178,7 +178,8 @@ func foldLine(line string, fw int) (folded string) {
 // *ldap.DelRequest, *ldap.ModifyRequest and *ldap.ModifyDNRequest or slices
 // of any of those.
 //
-// See Marshal() for the fw argument.
+// The fw parameter sets the FoldWidth of the internally used *LDIF,
+// see Marshal() for a description.
 func Dump(fh io.Writer, fw int, entries ...interface{}) error {
 	l, err := ToLDIF(entries...)
 	if err != nil {
