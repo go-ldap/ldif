@@ -164,7 +164,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 		}
 
 		if l.Version != 1 {
-			return nil, errors.New("Invalid version spec " + string(line))
+			return nil, errors.New("invalid version spec " + string(line))
 		}
 
 		l.Version = 1
@@ -180,7 +180,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 	}
 
 	if !strings.HasPrefix(lines[0], "dn:") {
-		return nil, errors.New("Missing dn:")
+		return nil, errors.New("missing dn: line")
 	}
 	_, val, err := l.parseLine(lines[0])
 	if err != nil {
@@ -492,7 +492,7 @@ func validOID(oid string) error {
 		case c >= '0' && c <= '9':
 			lastDot = false
 		default:
-			return errors.New("Invalid character in OID")
+			return errors.New("invalid character in OID")
 		}
 	}
 	return nil
