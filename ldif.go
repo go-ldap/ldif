@@ -26,15 +26,26 @@ type Entry struct {
 
 // The LDIF struct is used for parsing an LDIF. The Controls
 // is used to tell the parser to ignore any controls found
-// when parsing (default: false to ignore the controls).
+// when parsing (default: false to ignore the controls). Note
+// that the support for controls is quite limited currently,
+// the only one is ManageDsaIt.
+//
 // FoldWidth is used for the line lenght when marshalling.
+//
+// When the Callback func is non nil, it is called for each
+// parsed entry.
+//
+// IgnoreEmptyValues can be set return the attribute with an
+// empty value instead of raising an error.
 type LDIF struct {
-	Entries    []*Entry
-	Version    int
-	changeType string
-	FoldWidth  int
-	Controls   bool
-	firstEntry bool
+	Entries           []*Entry
+	Version           int
+	changeType        string
+	FoldWidth         int
+	Controls          bool
+	firstEntry        bool
+	Callback          func(*Entry)
+	IgnoreEmptyValues bool
 }
 
 // The ParseError holds the error message and the line in the ldif
@@ -71,6 +82,13 @@ func ParseWithControls(str string) (l *LDIF, err error) {
 	l = &LDIF{Controls: true}
 	err = Unmarshal(buf, l)
 	return
+}
+
+// ParseWithCallback wraps Unmarshal to parse an LDIF from the
+// given io.Reader and calls cb for every entry found.
+func ParseWithCallback(r io.Reader, cb func(*Entry)) error {
+	l := &LDIF{Callback: cb}
+	return Unmarshal(r, l)
 }
 
 // Unmarshal parses the LDIF from the given io.Reader into the LDIF struct.
@@ -111,7 +129,11 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 				if perr != nil {
 					return &ParseError{Line: curLine, Message: perr.Error()}
 				}
-				l.Entries = append(l.Entries, entry)
+				if l.Callback != nil {
+					l.Callback(entry)
+				} else {
+					l.Entries = append(l.Entries, entry)
+				}
 				line = ""
 				lines = []string{}
 				if err == io.EOF {
@@ -158,7 +180,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 		}
 
 		if l.Version != 1 {
-			return nil, errors.New("Invalid version spec " + string(line))
+			return nil, errors.New("invalid version spec " + string(line))
 		}
 
 		l.Version = 1
@@ -174,7 +196,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 	}
 
 	if !strings.HasPrefix(lines[0], "dn:") {
-		return nil, errors.New("Missing dn:")
+		return nil, errors.New("missing dn: line")
 	}
 	_, val, err := l.parseLine(lines[0])
 	if err != nil {
@@ -193,6 +215,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 		return nil, err
 	}
 
+	l.changeType = "" // reset from previous
 	if strings.HasPrefix(lines[0], "changetype:") {
 		_, val, err := l.parseLine(lines[0])
 		if err != nil {
@@ -310,6 +333,11 @@ func (l *LDIF) parseLine(line string) (attr, val string, err error) {
 	}
 
 	if off > len(line)-2 {
+		if l.IgnoreEmptyValues {
+			attr = strings.Split(line, ":")[0]
+			val = ""
+			return
+		}
 		err = errors.New("empty value")
 		// FIXME: this is allowed for some attributes, e.g. seeAlso
 		return
@@ -480,7 +508,7 @@ func validOID(oid string) error {
 		case c >= '0' && c <= '9':
 			lastDot = false
 		default:
-			return errors.New("Invalid character in OID")
+			return errors.New("invalid character in OID")
 		}
 	}
 	return nil

@@ -1,8 +1,10 @@
 package ldif_test
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/go-ldap/ldif"
@@ -255,5 +257,27 @@ telephonenumber: +1 408 555 1212
 func TestLDIFVersionOnSecond(t *testing.T) {
 	if _, err := ldif.Parse(ldifVersionOnSecond); err == nil {
 		t.Errorf("did not fail to parse LDIF")
+	}
+}
+
+func TestLDIFCallback(t *testing.T) {
+	src := bytes.NewBuffer([]byte(ldifRFC2849Example))
+	dst := bytes.NewBuffer(nil)
+	ld := &ldif.LDIF{Callback: func(e *ldif.Entry) {
+		if e.Entry.GetAttributeValue("uid") == "bjensen" {
+			ldif.Dump(dst, 0, e.Entry)
+		}
+	}}
+	err := ldif.Unmarshal(src, ld)
+	if err != nil {
+		t.Errorf("failed to parse LDIF: %s", err)
+	}
+	ret := dst.String()
+	out := strings.Split(ret, "\n")
+	if out[0] != `dn: cn=Barbara Jensen, ou=Product Development, dc=airius, dc=com` {
+		t.Errorf("wrong dn line")
+	}
+	if len(out) != 13 { // 13: trailing empty line
+		t.Errorf("output not as expected: >>%#v<<", out)
 	}
 }
