@@ -26,8 +26,17 @@ type Entry struct {
 
 // The LDIF struct is used for parsing an LDIF. The Controls
 // is used to tell the parser to ignore any controls found
-// when parsing (default: false to ignore the controls).
+// when parsing (default: false to ignore the controls). Note
+// that the support for controls is quite limited currently,
+// the only one is ManageDsaIt.
+//
 // FoldWidth is used for the line lenght when marshalling.
+//
+// When the Callback func is non nil, it is called for each
+// parsed entry.
+//
+// IgnoreEmptyValues can be set return the attribute with an
+// empty value instead of raising an error.
 type LDIF struct {
 	Entries           []*Entry
 	Version           int
@@ -73,6 +82,13 @@ func ParseWithControls(str string) (l *LDIF, err error) {
 	l = &LDIF{Controls: true}
 	err = Unmarshal(buf, l)
 	return
+}
+
+// ParseWithCallback wraps Unmarshal to parse an LDIF from the
+// given io.Reader and calls cb for every entry found.
+func ParseWithCallback(r io.Reader, cb func(*Entry)) error {
+	l := &LDIF{Callback: cb}
+	return Unmarshal(r, l)
 }
 
 // Unmarshal parses the LDIF from the given io.Reader into the LDIF struct.
