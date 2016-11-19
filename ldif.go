@@ -29,12 +29,14 @@ type Entry struct {
 // when parsing (default: false to ignore the controls).
 // FoldWidth is used for the line lenght when marshalling.
 type LDIF struct {
-	Entries    []*Entry
-	Version    int
-	changeType string
-	FoldWidth  int
-	Controls   bool
-	firstEntry bool
+	Entries           []*Entry
+	Version           int
+	changeType        string
+	FoldWidth         int
+	Controls          bool
+	firstEntry        bool
+	Callback          func(*Entry)
+	IgnoreEmptyValues bool
 }
 
 // The ParseError holds the error message and the line in the ldif
@@ -111,7 +113,11 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 				if perr != nil {
 					return &ParseError{Line: curLine, Message: perr.Error()}
 				}
-				l.Entries = append(l.Entries, entry)
+				if l.Callback != nil {
+					l.Callback(entry)
+				} else {
+					l.Entries = append(l.Entries, entry)
+				}
 				line = ""
 				lines = []string{}
 				if err == io.EOF {
@@ -193,6 +199,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 		return nil, err
 	}
 
+	l.changeType = "" // reset from previous
 	if strings.HasPrefix(lines[0], "changetype:") {
 		_, val, err := l.parseLine(lines[0])
 		if err != nil {
@@ -310,6 +317,11 @@ func (l *LDIF) parseLine(line string) (attr, val string, err error) {
 	}
 
 	if off > len(line)-2 {
+		if l.IgnoreEmptyValues {
+			attr = strings.Split(line, ":")[0]
+			val = ""
+			return
+		}
 		err = errors.New("empty value")
 		// FIXME: this is allowed for some attributes, e.g. seeAlso
 		return
