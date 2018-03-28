@@ -81,11 +81,11 @@ func TestLDIFParseRFC2849Example6(t *testing.T) {
 	if l.Entries[3].Modify == nil {
 		t.Errorf("last entry not a modify request")
 	}
-	if l.Entries[3].Modify.DeleteAttributes[0].Type != "description" {
+	if l.Entries[3].Modify.Changes[1].Modification.Type != "description" {
 		t.Errorf("RFC 2849 example 6: no deletion of description in last entry")
 	}
-	if l.Entries[2].Modify.ReplaceAttributes[0].Type != "telephonenumber" &&
-		l.Entries[2].Modify.ReplaceAttributes[0].Vals[1] != "+1 408 555 5678" {
+	if l.Entries[2].Modify.Changes[2].Modification.Type != "telephonenumber" &&
+		l.Entries[2].Modify.Changes[2].Modification.Vals[1] != "+1 408 555 5678" {
 		t.Errorf("RFC 2849 example 6: no replacing of telephonenumber")
 	}
 }

@@ -33,8 +33,7 @@ type Entry struct {
 //
 // FoldWidth is used for the line lenght when marshalling.
 //
-// When the Callback func is non nil, it is called for each
-// parsed entry.
+// When the Chan is non nil, it receives each parsed entry.
 //
 // IgnoreEmptyValues can be set return the attribute with an
 // empty value instead of raising an error.
@@ -45,7 +44,7 @@ type LDIF struct {
 	FoldWidth         int
 	Controls          bool
 	firstEntry        bool
-	Callback          func(*Entry)
+	Chan              chan *Entry
 	IgnoreEmptyValues bool
 	Logger            *log.Logger
 }
@@ -86,10 +85,10 @@ func ParseWithControls(str string) (l *LDIF, err error) {
 	return
 }
 
-// ParseWithCallback wraps Unmarshal to parse an LDIF from the
+// ParseWithChannel wraps Unmarshal to parse an LDIF from the
 // given io.Reader and calls cb for every entry found.
-func ParseWithCallback(r io.Reader, cb func(*Entry)) error {
-	l := &LDIF{Callback: cb}
+func ParseWithChannel(r io.Reader, ch chan *Entry) error {
+	l := &LDIF{Chan: ch}
 	return Unmarshal(r, l)
 }
 
@@ -131,8 +130,8 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 				if perr != nil {
 					return &ParseError{Line: curLine, Message: perr.Error()}
 				}
-				if l.Callback != nil {
-					l.Callback(entry)
+				if l.Chan != nil {
+					l.Chan <- entry
 				} else {
 					l.Entries = append(l.Entries, entry)
 				}

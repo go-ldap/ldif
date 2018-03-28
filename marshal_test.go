@@ -2,9 +2,10 @@ package ldif_test
 
 import (
 	"bytes"
+	"testing"
+
 	"github.com/go-ldap/ldif"
 	"gopkg.in/ldap.v2"
-	"testing"
 )
 
 var personLDIF = `dn: uid=someone,ou=people,dc=example,dc=org
@@ -146,6 +147,9 @@ description:: VGhlIFBlw7ZwbGUgw5ZyZ2FuaXphdGlvbg==
 func TestMarshalMod(t *testing.T) {
 	modLDIF := `dn: uid=someone,ou=people,dc=example,dc=org
 changetype: modify
+replace: sn
+sn: One
+-
 add: givenName
 givenName: Some
 -
@@ -153,9 +157,6 @@ delete: mail
 -
 delete: telephoneNumber
 telephoneNumber: 123 456 789 - 0
--
-replace: sn
-sn: One
 -
 
 `
@@ -174,7 +175,7 @@ sn: One
 		t.Errorf("Failed to marshal entry: %s", err)
 	}
 	if res != modLDIF {
-		t.Errorf("unexpected result: >>%s<<", res)
+		t.Errorf("unexpected result: >>%s<<\n>>%s<<", res, modLDIF)
 	}
 }
 
