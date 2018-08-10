@@ -174,7 +174,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 	}
 
 	if !strings.HasPrefix(lines[0], "dn:") {
-		return nil, errors.New("Missing dn:")
+		return nil, errors.New("missing 'dn:'")
 	}
 	_, val, err := l.parseLine(lines[0])
 	if err != nil {
