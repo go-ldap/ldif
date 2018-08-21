@@ -277,11 +277,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 				if attr != attribute {
 					return nil, fmt.Errorf("invalid attribute %s in %s request for %s", attr, op, attribute)
 				}
-				if values == nil {
-					values = []string{val}
-				} else {
-					values = append(values, val)
-				}
+				values = append(values, val)
 			}
 		}
 		return &Entry{Modify: mod}, nil
