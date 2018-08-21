@@ -174,7 +174,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 	}
 
 	if !strings.HasPrefix(lines[0], "dn:") {
-		return nil, errors.New("Missing dn:")
+		return nil, errors.New("missing 'dn:'")
 	}
 	_, val, err := l.parseLine(lines[0])
 	if err != nil {
@@ -452,7 +452,7 @@ func readURLValue(val string) (string, error) {
 	if u.Scheme != "file" {
 		return "", fmt.Errorf("unsupported URL scheme %s", u.Scheme)
 	}
-	data, err := ioutil.ReadFile(u.Path)
+	data, err := ioutil.ReadFile(toPath(u))
 	if err != nil {
 		return "", fmt.Errorf("failed to read %s: %s", u.Path, err)
 	}

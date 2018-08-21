@@ -3,6 +3,8 @@ package ldif_test
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-ldap/ldif"
@@ -173,7 +175,9 @@ func TestLDIFURL(t *testing.T) {
 	defer os.Remove(f.Name())
 	f.Write([]byte("TEST\n"))
 	f.Sync()
-	l, err := ldif.Parse("dn: uid=someone,dc=example,dc=org\ndescription:< file://" + f.Name() + "\n")
+	d := strings.TrimPrefix(filepath.ToSlash(f.Name()), "C:")
+
+	l, err := ldif.Parse("dn: uid=someone,dc=example,dc=org\ndescription:< file:///" + d + "\n")
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
