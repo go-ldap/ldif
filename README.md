@@ -8,6 +8,7 @@ Support for moddn / modrdn changes is missing (in Unmarshal and
 Marshal) - gopkg.in/ldap.v2 does not support it currently
 
 ## Controls
+
 Only simple controls without control value are supported, currently
 just
    Manage DSA IT - oid: 2.16.840.1.113730.3.4.2
