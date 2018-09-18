@@ -174,7 +174,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 	}
 
 	if !strings.HasPrefix(lines[0], "dn:") {
-		return nil, errors.New("Missing dn:")
+		return nil, errors.New("missing 'dn:'")
 	}
 	_, val, err := l.parseLine(lines[0])
 	if err != nil {
@@ -249,12 +249,18 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 				case "add":
 					mod.Add(attribute, values)
 					op = ""
+					attribute = ""
+					values = nil
 				case "replace":
 					mod.Replace(attribute, values)
 					op = ""
+					attribute = ""
+					values = nil
 				case "delete":
 					mod.Delete(attribute, values)
 					op = ""
+					attribute = ""
+					values = nil
 				default:
 					return nil, fmt.Errorf("invalid operation %s in modify request", op)
 				}
@@ -271,6 +277,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 				if attr != attribute {
 					return nil, fmt.Errorf("invalid attribute %s in %s request for %s", attr, op, attribute)
 				}
+				values = append(values, val)
 			}
 		}
 		return &Entry{Modify: mod}, nil
@@ -452,7 +459,7 @@ func readURLValue(val string) (string, error) {
 	if u.Scheme != "file" {
 		return "", fmt.Errorf("unsupported URL scheme %s", u.Scheme)
 	}
-	data, err := ioutil.ReadFile(u.Path)
+	data, err := ioutil.ReadFile(toPath(u))
 	if err != nil {
 		return "", fmt.Errorf("failed to read %s: %s", u.Path, err)
 	}
