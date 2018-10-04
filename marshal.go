@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"bufio"
+	"bytes"
 	"gopkg.in/ldap.v2"
 	"io"
 )
@@ -14,36 +16,36 @@ var foldWidth = 76
 // records in one LDIF
 var ErrMixed = errors.New("cannot mix change records and content records")
 
-// Marshal returns an LDIF string from the given LDIF.
+// Marshal writes LDIF string to the specified Buffer.
 //
 // The default line lenght is 76 characters. This can be changed by setting
 // the fw parameter to something else than 0.
 // For a fold width < 0, no folding will be done, with 0, the default is used.
-func Marshal(l *LDIF) (data string, err error) {
+func MarshalBuffer(l *LDIF, output io.Writer) (err error) {
 	hasEntry := false
 	hasChange := false
-
+	buffer := bufio.NewWriter(output)
 	if l.Version > 0 {
-		data = "version: 1\n"
+		buffer.WriteString("version: 1\n")
 	}
+	
 
 	fw := l.FoldWidth
 	if fw == 0 {
 		fw = foldWidth
 	}
-
 	for _, e := range l.Entries {
 		switch {
 		case e.Add != nil:
 			hasChange = true
 			if hasEntry {
-				return "", ErrMixed
+				return ErrMixed
 			}
-			data += foldLine("dn: "+e.Add.DN, fw) + "\n"
-			data += "changetype: add\n"
+			buffer.WriteString(foldLine("dn: "+e.Add.DN, fw) + "\n")
+			buffer.WriteString("changetype: add\n")
 			for _, add := range e.Add.Attributes {
 				if len(add.Vals) == 0 {
-					return "", errors.New("changetype 'add' requires non empty value list")
+					return errors.New("changetype 'add' requires non empty value list")
 				}
 				for _, v := range add.Vals {
 					ev, t := encodeValue(v)
@@ -51,75 +53,75 @@ func Marshal(l *LDIF) (data string, err error) {
 					if t {
 						col = ":: "
 					}
-					data += foldLine(add.Type+col+ev, fw) + "\n"
+					buffer.WriteString(foldLine(add.Type+col+ev, fw) + "\n")
 				}
 			}
 
 		case e.Del != nil:
 			hasChange = true
 			if hasEntry {
-				return "", ErrMixed
+				return ErrMixed
 			}
-			data += foldLine("dn: "+e.Del.DN, fw) + "\n"
-			data += "changetype: delete\n"
+			buffer.WriteString(foldLine("dn: "+e.Del.DN, fw) + "\n")
+			buffer.WriteString("changetype: delete\n")
 
 		case e.Modify != nil:
 			hasChange = true
 			if hasEntry {
-				return "", ErrMixed
+				return ErrMixed
 			}
-			data += foldLine("dn: "+e.Modify.DN, fw) + "\n"
-			data += "changetype: modify\n"
+			buffer.WriteString(foldLine("dn: "+e.Modify.DN, fw) + "\n")
+			buffer.WriteString("changetype: modify\n")
 			for _, mod := range e.Modify.AddAttributes {
 				if len(mod.Vals) == 0 {
-					return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
+					return errors.New("changetype 'modify', op 'add' requires non empty value list")
 				}
 
-				data += "add: " + mod.Type + "\n"
+				buffer.WriteString("add: " + mod.Type + "\n")
 				for _, v := range mod.Vals {
 					ev, t := encodeValue(v)
 					col := ": "
 					if t {
 						col = ":: "
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
+					buffer.WriteString(foldLine(mod.Type+col+ev, fw) + "\n")
 				}
-				data += "-\n"
+				buffer.WriteString("-\n")
 			}
 			for _, mod := range e.Modify.DeleteAttributes {
-				data += "delete: " + mod.Type + "\n"
+				buffer.WriteString("delete: " + mod.Type + "\n")
 				for _, v := range mod.Vals {
 					ev, t := encodeValue(v)
 					col := ": "
 					if t {
 						col = ":: "
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
+					buffer.WriteString(foldLine(mod.Type+col+ev, fw) + "\n")
 				}
-				data += "-\n"
+				buffer.WriteString("-\n")
 			}
 			for _, mod := range e.Modify.ReplaceAttributes {
 				if len(mod.Vals) == 0 {
-					return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
+					return errors.New("changetype 'modify', op 'replace' requires non empty value list")
 				}
-				data += "replace: " + mod.Type + "\n"
+				buffer.WriteString("replace: " + mod.Type + "\n")
 				for _, v := range mod.Vals {
 					ev, t := encodeValue(v)
 					col := ": "
 					if t {
 						col = ":: "
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
+					buffer.WriteString(foldLine(mod.Type+col+ev, fw) + "\n")
 				}
-				data += "-\n"
+				buffer.WriteString("-\n")
 			}
 
 		default:
 			hasEntry = true
 			if hasChange {
-				return "", ErrMixed
+				return ErrMixed
 			}
-			data += foldLine("dn: "+e.Entry.DN, fw) + "\n"
+			buffer.WriteString(foldLine("dn: "+e.Entry.DN, fw) + "\n")
 			for _, av := range e.Entry.Attributes {
 				for _, v := range av.Values {
 					ev, t := encodeValue(v)
@@ -127,13 +129,25 @@ func Marshal(l *LDIF) (data string, err error) {
 					if t {
 						col = ":: "
 					}
-					data += foldLine(av.Name+col+ev, fw) + "\n"
+					buffer.WriteString(foldLine(av.Name+col+ev, fw) + "\n")
 				}
 			}
 		}
-		data += "\n"
+		buffer.WriteString("\n")
 	}
-	return data, nil
+	buffer.Flush()
+	return nil
+}
+
+// Marshal returns an LDIF string from the given LDIF.
+func Marshal(l *LDIF) (data string, err error) {
+	temp := new(bytes.Buffer)
+	err2 := MarshalBuffer(l, temp)
+	if err2 == nil {
+		return temp.String(), nil
+	}else {
+		return "", err2
+	}
 }
 
 func encodeValue(value string) (string, bool) {
