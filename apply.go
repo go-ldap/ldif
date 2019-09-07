@@ -2,9 +2,8 @@ package ldif
 
 import (
 	"fmt"
+	"gopkg.in/ldap.v3"
 	"log"
-
-	"gopkg.in/ldap.v2"
 )
 
 // Apply sends the LDIF entries to the server and does the changes as
@@ -19,7 +18,7 @@ func (l *LDIF) Apply(conn ldap.Client, continueOnErr bool) error {
 	for _, entry := range l.Entries {
 		switch {
 		case entry.Entry != nil:
-			add := ldap.NewAddRequest(entry.Entry.DN)
+			add := ldap.NewAddRequest(entry.Entry.DN, nil)
 			for _, attr := range entry.Entry.Attributes {
 				add.Attribute(attr.Name, attr.Values)
 			}

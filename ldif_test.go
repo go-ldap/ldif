@@ -1,11 +1,10 @@
-package ldif_test
+package ldif
 
 import (
+	"gopkg.in/ldap.v3"
 	"io/ioutil"
 	"os"
 	"testing"
-
-	"github.com/go-ldap/ldif"
 )
 
 var ldifRFC2849Example = `version: 1
@@ -31,7 +30,7 @@ telephonenumber: +1 408 555 1212
 `
 
 func TestLDIFParseRFC2849Example(t *testing.T) {
-	l, err := ldif.Parse(ldifRFC2849Example)
+	l, err := Parse(ldifRFC2849Example)
 	if err != nil {
 		t.Errorf("Failed to parse RFC 2849 example: %s", err)
 	}
@@ -46,7 +45,7 @@ cn: Some User
 `
 
 func TestLDIFParseEmptyAttr(t *testing.T) {
-	_, err := ldif.Parse(ldifEmpty)
+	_, err := Parse(ldifEmpty)
 	if err == nil {
 		t.Errorf("Did not fail to parse empty attribute")
 	}
@@ -57,7 +56,7 @@ cn: Some User
 `
 
 func TestLDIFParseMissingDN(t *testing.T) {
-	_, err := ldif.Parse(ldifMissingDN)
+	_, err := Parse(ldifMissingDN)
 	if err == nil {
 		t.Errorf("Did not fail to parse missing DN attribute")
 	}
@@ -70,7 +69,7 @@ cn: Someone
 `
 
 func TestLDIFContinuation(t *testing.T) {
-	l, err := ldif.Parse(ldifContinuation)
+	l, err := Parse(ldifContinuation)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -85,7 +84,7 @@ sn:: U29tZSBPbmU=
 `
 
 func TestLDIFBase64(t *testing.T) {
-	l, err := ldif.Parse(ldifBase64)
+	l, err := Parse(ldifBase64)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -103,7 +102,7 @@ sn:: XXX-U29tZSBPbmU=
 `
 
 func TestLDIFBase64Broken(t *testing.T) {
-	_, err := ldif.Parse(ldifBase64Broken)
+	_, err := Parse(ldifBase64Broken)
 	if err == nil {
 		t.Errorf("Did not failed to parse broken base64")
 	}
@@ -115,7 +114,7 @@ sn:: U29tZSBPbmU=
 `
 
 func TestLDIFTrailingBlank(t *testing.T) {
-	_, err := ldif.Parse(ldifTrailingBlank)
+	_, err := Parse(ldifTrailingBlank)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -128,7 +127,7 @@ sn: someone
 `
 
 func TestLDIFComments(t *testing.T) {
-	l, err := ldif.Parse(ldifComments)
+	l, err := Parse(ldifComments)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -142,7 +141,7 @@ sn:someone
 `
 
 func TestLDIFNoSpace(t *testing.T) {
-	l, err := ldif.Parse(ldifNoSpace)
+	l, err := Parse(ldifNoSpace)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -156,7 +155,7 @@ sn:    someone
 `
 
 func TestLDIFMultiSpace(t *testing.T) {
-	l, err := ldif.Parse(ldifMultiSpace)
+	l, err := Parse(ldifMultiSpace)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -173,7 +172,7 @@ func TestLDIFURL(t *testing.T) {
 	defer os.Remove(f.Name())
 	f.Write([]byte("TEST\n"))
 	f.Sync()
-	l, err := ldif.Parse("dn: uid=someone,dc=example,dc=org\ndescription:< file:///" + f.Name() + "\n")
+	l, err := Parse("dn: uid=someone,dc=example,dc=org\ndescription:< file:///" + f.Name() + "\n")
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -198,7 +197,7 @@ ou: groups
 `
 
 func TestLDIFMultiBlankLines(t *testing.T) {
-	l, err := ldif.Parse(ldifMultiBlankLines)
+	l, err := Parse(ldifMultiBlankLines)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -220,7 +219,7 @@ ou: users
 `
 
 func TestLDIFLeadingTrailingBlankLines(t *testing.T) {
-	l, err := ldif.Parse(ldifLeadingTrailingBlankLines)
+	l, err := Parse(ldifLeadingTrailingBlankLines)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -253,7 +252,7 @@ telephonenumber: +1 408 555 1212
 `
 
 func TestLDIFVersionOnSecond(t *testing.T) {
-	if _, err := ldif.Parse(ldifVersionOnSecond); err == nil {
+	if _, err := Parse(ldifVersionOnSecond); err == nil {
 		t.Errorf("did not fail to parse LDIF")
 	}
 }
@@ -276,7 +275,7 @@ sn: One
 `
 
 func TestParseModify(t *testing.T) {
-	l, err := ldif.Parse(ldifModify)
+	l, err := Parse(ldifModify)
 	if err != nil {
 		t.Errorf("Failed to parse LDIF: %s", err)
 	}
@@ -285,69 +284,90 @@ func TestParseModify(t *testing.T) {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
+	var deleteAttributes = make([]ldap.Change, 0, 0)
+	for k, e := range l.Entries[0].Modify.Changes {
+		if e.Operation == ldap.DeleteAttribute {
+			deleteAttributes = append(deleteAttributes, l.Entries[0].Modify.Changes[k])
+		}
+	}
+
 	//DeleteAttributes
-	attributes := l.Entries[0].Modify.DeleteAttributes
+	attributes := deleteAttributes
 	if actual := len(attributes); actual != 2 {
 		t.Error("Expected", 2, "Actual", actual)
 	}
 
-	if actual := attributes[0].Type; actual != "mail" {
+	if actual := attributes[0].Modification.Type; actual != "mail" {
 		t.Error("Expected", "mail", "Actual", actual)
 	}
 
-	if actual := len(attributes[0].Vals); actual != 0 {
+	if actual := len(attributes[0].Modification.Vals); actual != 0 {
 		t.Error("Expected", 0, "Actual", actual)
 	}
 
-	if actual := attributes[1].Type; actual != "telephoneNumber" {
+	if actual := attributes[1].Modification.Type; actual != "telephoneNumber" {
 		t.Error("Expected", "telephoneNumber", "Actual", actual)
 	}
 
-	if actual := len(attributes[1].Vals); actual != 1 {
+	if actual := len(attributes[1].Modification.Vals); actual != 1 {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
-	if actual := attributes[1].Vals[0]; actual != "123 456 789 - 0" {
+	if actual := attributes[1].Modification.Vals[0]; actual != "123 456 789 - 0" {
 		t.Error("Expected", "123 456 789 - 0", "Actual", actual)
 	}
 
 	//ReplaceAttributes
-	attributes = l.Entries[0].Modify.ReplaceAttributes
+	var replaceAttributes = make([]ldap.Change, 0, 0)
+	for k, e := range l.Entries[0].Modify.Changes {
+		if e.Operation == ldap.ReplaceAttribute {
+			replaceAttributes = append(replaceAttributes, l.Entries[0].Modify.Changes[k])
+		}
+	}
+
+	attributes = replaceAttributes
 	if actual := len(attributes); actual != 1 {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
-	if actual := attributes[0].Type; actual != "sn" {
+	if actual := attributes[0].Modification.Type; actual != "sn" {
 		t.Error("Expected", "sn", "Actual", actual)
 	}
 
-	if actual := len(attributes[0].Vals); actual != 1 {
+	if actual := len(attributes[0].Modification.Vals); actual != 1 {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
-	if actual := attributes[0].Vals[0]; actual != "One" {
+	if actual := attributes[0].Modification.Vals[0]; actual != "One" {
 		t.Error("Expected", "One", "Actual", actual)
 	}
 
 	//AddAttributes
-	attributes = l.Entries[0].Modify.AddAttributes
+	var addAttributes = make([]ldap.Change, 0, 0)
+	for k, e := range l.Entries[0].Modify.Changes {
+		if e.Operation == ldap.AddAttribute {
+			addAttributes = append(addAttributes, l.Entries[0].Modify.Changes[k])
+		}
+	}
+
+	attributes = addAttributes
 	if actual := len(attributes); actual != 1 {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
-	if actual := attributes[0].Type; actual != "givenName" {
+	if actual := attributes[0].Modification.Type; actual != "givenName" {
 		t.Error("Expected", "givenName", "Actual", actual)
 	}
 
-	if actual := len(attributes[0].Vals); actual != 2 {
+	if actual := len(attributes[0].Modification.Vals); actual != 2 {
 		t.Error("Expected", 2, "Actual", actual)
 	}
 
-	if actual := attributes[0].Vals[0]; actual != "Some1" {
+	if actual := attributes[0].Modification.Vals[0]; actual != "Some1" {
 		t.Error("Expected", "Some1", "Actual", actual)
 	}
 
-	if actual := attributes[0].Vals[1]; actual != "Some2" {
+	if actual := attributes[0].Modification.Vals[1]; actual != "Some2" {
 		t.Error("Expected", "Some2", "Actual", actual)
 	}
 

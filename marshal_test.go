@@ -1,9 +1,8 @@
-package ldif_test
+package ldif
 
 import (
 	"bytes"
-	"github.com/go-ldap/ldif"
-	"gopkg.in/ldap.v2"
+	"gopkg.in/ldap.v3"
 	"testing"
 )
 
@@ -71,12 +70,12 @@ var entries = []*ldap.Entry{
 }
 
 func TestMarshalSingleEntry(t *testing.T) {
-	l := &ldif.LDIF{
-		Entries: []*ldif.Entry{
+	l := &LDIF{
+		Entries: []*Entry{
 			{Entry: entries[1]},
 		},
 	}
-	res, err := ldif.Marshal(l)
+	res, err := Marshal(l)
 	if err != nil {
 		t.Errorf("Failed to marshal entry: %s", err)
 	}
@@ -86,13 +85,13 @@ func TestMarshalSingleEntry(t *testing.T) {
 }
 
 func TestMarshalEntries(t *testing.T) {
-	l := &ldif.LDIF{
-		Entries: []*ldif.Entry{
+	l := &LDIF{
+		Entries: []*Entry{
 			{Entry: entries[0]},
 			{Entry: entries[1]},
 		},
 	}
-	res, err := ldif.Marshal(l)
+	res, err := Marshal(l)
 	if err != nil {
 		t.Errorf("Failed to marshal entry: %s", err)
 	}
@@ -129,12 +128,12 @@ description:: VGhlIFBlw7ZwbGUgw5ZyZ2FuaXphdGlvbg==
 			},
 		},
 	}
-	l := &ldif.LDIF{
-		Entries: []*ldif.Entry{
+	l := &LDIF{
+		Entries: []*Entry{
 			{Entry: entry},
 		},
 	}
-	res, err := ldif.Marshal(l)
+	res, err := Marshal(l)
 	if err != nil {
 		t.Errorf("Failed to marshal entry: %s", err)
 	}
@@ -146,6 +145,9 @@ description:: VGhlIFBlw7ZwbGUgw5ZyZ2FuaXphdGlvbg==
 func TestMarshalMod(t *testing.T) {
 	modLDIF := `dn: uid=someone,ou=people,dc=example,dc=org
 changetype: modify
+replace: sn
+sn: One
+-
 add: givenName
 givenName: Some
 -
@@ -154,22 +156,19 @@ delete: mail
 delete: telephoneNumber
 telephoneNumber: 123 456 789 - 0
 -
-replace: sn
-sn: One
--
 
 `
-	mod := ldap.NewModifyRequest("uid=someone,ou=people,dc=example,dc=org")
+	mod := ldap.NewModifyRequest("uid=someone,ou=people,dc=example,dc=org", nil)
 	mod.Replace("sn", []string{"One"})
 	mod.Add("givenName", []string{"Some"})
 	mod.Delete("mail", []string{})
 	mod.Delete("telephoneNumber", []string{"123 456 789 - 0"})
-	l := &ldif.LDIF{
-		Entries: []*ldif.Entry{
+	l := &LDIF{
+		Entries: []*Entry{
 			{Modify: mod},
 		},
 	}
-	res, err := ldif.Marshal(l)
+	res, err := Marshal(l)
 	if err != nil {
 		t.Errorf("Failed to marshal entry: %s", err)
 	}
@@ -190,16 +189,16 @@ cn: Someone
 mail: someone@example.org
 
 `
-	add := ldap.NewAddRequest("uid=someone,ou=people,dc=example,dc=org")
+	add := ldap.NewAddRequest("uid=someone,ou=people,dc=example,dc=org", nil)
 	for _, a := range entries[1].Attributes {
 		add.Attribute(a.Name, a.Values)
 	}
-	l := &ldif.LDIF{
-		Entries: []*ldif.Entry{
+	l := &LDIF{
+		Entries: []*Entry{
 			{Add: add},
 		},
 	}
-	res, err := ldif.Marshal(l)
+	res, err := Marshal(l)
 	if err != nil {
 		t.Errorf("Failed to marshal entry: %s", err)
 	}
@@ -214,12 +213,12 @@ changetype: delete
 
 `
 	del := ldap.NewDelRequest("uid=someone,ou=people,dc=example,dc=org", nil)
-	l := &ldif.LDIF{
-		Entries: []*ldif.Entry{
+	l := &LDIF{
+		Entries: []*Entry{
 			{Del: del},
 		},
 	}
-	res, err := ldif.Marshal(l)
+	res, err := Marshal(l)
 	if err != nil {
 		t.Errorf("Failed to marshal entry: %s", err)
 	}
@@ -235,7 +234,7 @@ changetype: delete
 `
 	del := ldap.NewDelRequest("uid=someone,ou=people,dc=example,dc=org", nil)
 	buf := bytes.NewBuffer(nil)
-	err := ldif.Dump(buf, 0, del)
+	err := Dump(buf, 0, del)
 	if err != nil {
 		t.Errorf("Failed to dump entry: %s", err)
 	}

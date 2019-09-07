@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"gopkg.in/ldap.v2"
+	"gopkg.in/ldap.v3"
 	"io"
 )
 
@@ -70,48 +70,56 @@ func Marshal(l *LDIF) (data string, err error) {
 			}
 			data += foldLine("dn: "+e.Modify.DN, fw) + "\n"
 			data += "changetype: modify\n"
-			for _, mod := range e.Modify.AddAttributes {
-				if len(mod.Vals) == 0 {
-					return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
+
+			for _, mod := range e.Modify.Changes {
+				if mod.Operation == ldap.AddAttribute {
+					if len(mod.Modification.Vals) == 0 {
+						return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
+					}
+
+					data += "add: " + mod.Modification.Type + "\n"
+					for _, v := range mod.Modification.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
+					}
+					data += "-\n"
+					continue
 				}
 
-				data += "add: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+				if mod.Operation == ldap.DeleteAttribute {
+					data += "delete: " + mod.Modification.Type + "\n"
+					for _, v := range mod.Modification.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
+					data += "-\n"
+					continue
 				}
-				data += "-\n"
-			}
-			for _, mod := range e.Modify.DeleteAttributes {
-				data += "delete: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+
+				if mod.Operation == ldap.ReplaceAttribute {
+
+					if len(mod.Modification.Vals) == 0 {
+						return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
-				}
-				data += "-\n"
-			}
-			for _, mod := range e.Modify.ReplaceAttributes {
-				if len(mod.Vals) == 0 {
-					return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
-				}
-				data += "replace: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+					data += "replace: " + mod.Modification.Type + "\n"
+					for _, v := range mod.Modification.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
+					data += "-\n"
 				}
-				data += "-\n"
 			}
 
 		default:
