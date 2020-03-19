@@ -1,7 +1,7 @@
 package ldif
 
 import (
-	"gopkg.in/ldap.v3"
+	"github.com/go-ldap/ldap/v3"
 	"io/ioutil"
 	"os"
 	"testing"
