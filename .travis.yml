@@ -2,6 +2,9 @@ language: go
 go:
     - 1.6
     - 1.7
+    - 1.11
+    - 1.13
+    - 1.14
     - tip
 matrix:
     fast_finish: true
@@ -9,7 +12,6 @@ matrix:
         - go: tip
 go_import_path: github.com/go-ldap/ldif
 install:
-    - go get gopkg.in/asn1-ber.v1
     - go get github.com/go-ldap/ldap/v3
     - go get code.google.com/p/go.tools/cmd/cover || go get golang.org/x/tools/cmd/cover
     - go get github.com/golang/lint/golint || true
