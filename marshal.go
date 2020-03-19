@@ -4,8 +4,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"gopkg.in/ldap.v2"
 	"io"
+
+	"github.com/go-ldap/ldap/v3"
 )
 
 var foldWidth = 76
@@ -70,49 +71,99 @@ func Marshal(l *LDIF) (data string, err error) {
 			}
 			data += foldLine("dn: "+e.Modify.DN, fw) + "\n"
 			data += "changetype: modify\n"
-			for _, mod := range e.Modify.AddAttributes {
-				if len(mod.Vals) == 0 {
-					return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
-				}
+			for _, mod := range e.Modify.Changes {
+				fmt.Println(mod.Modification.Type, mod.Operation)
+				switch mod.Operation {
+				// add operation - https://tools.ietf.org/html/rfc4511#section-4.6
+				case 0:
+					if len(mod.Modification.Vals) == 0 {
+						return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
+					}
 
-				data += "add: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+					data += "add: " + mod.Modification.Type + "\n"
+					for _, v := range mod.Modification.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
-				}
-				data += "-\n"
-			}
-			for _, mod := range e.Modify.DeleteAttributes {
-				data += "delete: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+					data += "-\n"
+				// delete operation - https://tools.ietf.org/html/rfc4511#section-4.6
+				case 1:
+					data += "delete: " + mod.Modification.Type + "\n"
+					for _, v := range mod.Modification.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
-				}
-				data += "-\n"
-			}
-			for _, mod := range e.Modify.ReplaceAttributes {
-				if len(mod.Vals) == 0 {
-					return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
-				}
-				data += "replace: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+					data += "-\n"
+				// replace operation - https://tools.ietf.org/html/rfc4511#section-4.6
+				case 2:
+					if len(mod.Modification.Vals) == 0 {
+						return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
+					data += "replace: " + mod.Modification.Type + "\n"
+					for _, v := range mod.Modification.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
+					}
+					data += "-\n"
+				default:
+					return "", fmt.Errorf("invalid type %s in modify request", mod.Modification.Type)
 				}
-				data += "-\n"
 			}
+			// for _, mod := range e.Modify.AddAttributes {
+			// 	if len(mod.Vals) == 0 {
+			// 		return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
+			// 	}
+
+			// 	data += "add: " + mod.Type + "\n"
+			// 	for _, v := range mod.Vals {
+			// 		ev, t := encodeValue(v)
+			// 		col := ": "
+			// 		if t {
+			// 			col = ":: "
+			// 		}
+			// 		data += foldLine(mod.Type+col+ev, fw) + "\n"
+			// 	}
+			// 	data += "-\n"
+			// }
+			// for _, mod := range e.Modify.DeleteAttributes {
+			// 	data += "delete: " + mod.Type + "\n"
+			// 	for _, v := range mod.Vals {
+			// 		ev, t := encodeValue(v)
+			// 		col := ": "
+			// 		if t {
+			// 			col = ":: "
+			// 		}
+			// 		data += foldLine(mod.Type+col+ev, fw) + "\n"
+			// 	}
+			// 	data += "-\n"
+			// }
+			// for _, mod := range e.Modify.ReplaceAttributes {
+			// 	if len(mod.Vals) == 0 {
+			// 		return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
+			// 	}
+			// 	data += "replace: " + mod.Type + "\n"
+			// 	for _, v := range mod.Vals {
+			// 		ev, t := encodeValue(v)
+			// 		col := ": "
+			// 		if t {
+			// 			col = ":: "
+			// 		}
+			// 		data += foldLine(mod.Type+col+ev, fw) + "\n"
+			// 	}
+			// 	data += "-\n"
+			// }
 
 		default:
 			hasEntry = true

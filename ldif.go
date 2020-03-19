@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/ldap.v2"
+	"github.com/go-ldap/ldap/v3"
 )
 
 // Entry is one entry in the LDIF
@@ -220,7 +220,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 			return nil, err
 		}
 		// FIXME: controls for add - see https://github.com/go-ldap/ldap/issues/81
-		add := ldap.NewAddRequest(dn)
+		add := ldap.NewAddRequest(dn, controls)
 		for attr, vals := range attrs {
 			add.Attribute(attr, vals)
 		}
@@ -234,7 +234,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 
 	case "modify":
 		// FIXME: controls for modify - see https://github.com/go-ldap/ldap/issues/81
-		mod := ldap.NewModifyRequest(dn)
+		mod := ldap.NewModifyRequest(dn, controls)
 		var op, attribute string
 		var values []string
 		if lines[len(lines)-1] != "-" {

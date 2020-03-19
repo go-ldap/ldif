@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/go-ldap/ldap/v3"
 	"github.com/go-ldap/ldif"
 )
 
@@ -286,69 +287,84 @@ func TestParseModify(t *testing.T) {
 	}
 
 	//DeleteAttributes
-	attributes := l.Entries[0].Modify.DeleteAttributes
+	attributes := countChangeType("delete", l.Entries[0].Modify.Changes)
 	if actual := len(attributes); actual != 2 {
 		t.Error("Expected", 2, "Actual", actual)
 	}
 
-	if actual := attributes[0].Type; actual != "mail" {
+	if actual := attributes[0].Modification.Type; actual != "mail" {
 		t.Error("Expected", "mail", "Actual", actual)
 	}
 
-	if actual := len(attributes[0].Vals); actual != 0 {
+	if actual := len(attributes[0].Modification.Vals); actual != 0 {
 		t.Error("Expected", 0, "Actual", actual)
 	}
 
-	if actual := attributes[1].Type; actual != "telephoneNumber" {
+	if actual := attributes[1].Modification.Type; actual != "telephoneNumber" {
 		t.Error("Expected", "telephoneNumber", "Actual", actual)
 	}
 
-	if actual := len(attributes[1].Vals); actual != 1 {
+	if actual := len(attributes[1].Modification.Vals); actual != 1 {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
-	if actual := attributes[1].Vals[0]; actual != "123 456 789 - 0" {
+	if actual := attributes[1].Modification.Vals[0]; actual != "123 456 789 - 0" {
 		t.Error("Expected", "123 456 789 - 0", "Actual", actual)
 	}
 
-	//ReplaceAttributes
-	attributes = l.Entries[0].Modify.ReplaceAttributes
+	// //ReplaceAttributes
+	attributes = countChangeType("replace", l.Entries[0].Modify.Changes)
 	if actual := len(attributes); actual != 1 {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
-	if actual := attributes[0].Type; actual != "sn" {
+	if actual := attributes[0].Modification.Type; actual != "sn" {
 		t.Error("Expected", "sn", "Actual", actual)
 	}
 
-	if actual := len(attributes[0].Vals); actual != 1 {
+	if actual := len(attributes[0].Modification.Vals); actual != 1 {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
-	if actual := attributes[0].Vals[0]; actual != "One" {
+	if actual := attributes[0].Modification.Vals[0]; actual != "One" {
 		t.Error("Expected", "One", "Actual", actual)
 	}
 
-	//AddAttributes
-	attributes = l.Entries[0].Modify.AddAttributes
+	// //AddAttributes
+	attributes = countChangeType("add", l.Entries[0].Modify.Changes)
 	if actual := len(attributes); actual != 1 {
 		t.Error("Expected", 1, "Actual", actual)
 	}
 
-	if actual := attributes[0].Type; actual != "givenName" {
+	if actual := attributes[0].Modification.Type; actual != "givenName" {
 		t.Error("Expected", "givenName", "Actual", actual)
 	}
 
-	if actual := len(attributes[0].Vals); actual != 2 {
+	if actual := len(attributes[0].Modification.Vals); actual != 2 {
 		t.Error("Expected", 2, "Actual", actual)
 	}
 
-	if actual := attributes[0].Vals[0]; actual != "Some1" {
+	if actual := attributes[0].Modification.Vals[0]; actual != "Some1" {
 		t.Error("Expected", "Some1", "Actual", actual)
 	}
 
-	if actual := attributes[0].Vals[1]; actual != "Some2" {
+	if actual := attributes[0].Modification.Vals[1]; actual != "Some2" {
 		t.Error("Expected", "Some2", "Actual", actual)
 	}
+}
 
+// countChangeType is a helper function to minimise test changes migrating to ldapv3
+func countChangeType(typ string, ch []ldap.Change) []ldap.Change {
+	var t = map[string]uint{
+		"add":     0,
+		"delete":  1,
+		"replace": 2,
+	}
+	c := []ldap.Change{}
+	for _, i := range ch {
+		if i.Operation == t[typ] {
+			c = append(c, i)
+		}
+	}
+	return c
 }
