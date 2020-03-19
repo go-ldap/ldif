@@ -17,7 +17,7 @@ install:
     - go get github.com/go-asn1-ber/asn1-ber
     - go get github.com/go-ldap/ldap/v3
     - go get code.google.com/p/go.tools/cmd/cover || go get golang.org/x/tools/cmd/cover
-    - go get github.com/golang/lint/golint || true
+    - go get golang.org/x/lint/golint || true
     - go build -v ./...
 script:
     - make test
