@@ -26,7 +26,7 @@ fmt:
 
 # Only run on go1.5+
 vet:
-	go vet -atomic -bool -copylocks -nilfunc -printf -rangeloops -unreachable -unsafeptr -unusedresult .
+	go vet .
 
 # https://github.com/golang/lint
 # go get github.com/golang/lint/golint
