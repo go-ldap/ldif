@@ -2,9 +2,10 @@ package ldif_test
 
 import (
 	"bytes"
-	"github.com/go-ldap/ldif"
-	"gopkg.in/ldap.v2"
 	"testing"
+
+	"github.com/go-ldap/ldap/v3"
+	"github.com/go-ldap/ldif"
 )
 
 var personLDIF = `dn: uid=someone,ou=people,dc=example,dc=org
@@ -146,6 +147,9 @@ description:: VGhlIFBlw7ZwbGUgw5ZyZ2FuaXphdGlvbg==
 func TestMarshalMod(t *testing.T) {
 	modLDIF := `dn: uid=someone,ou=people,dc=example,dc=org
 changetype: modify
+replace: sn
+sn: One
+-
 add: givenName
 givenName: Some
 -
@@ -154,12 +158,9 @@ delete: mail
 delete: telephoneNumber
 telephoneNumber: 123 456 789 - 0
 -
-replace: sn
-sn: One
--
 
 `
-	mod := ldap.NewModifyRequest("uid=someone,ou=people,dc=example,dc=org")
+	mod := ldap.NewModifyRequest("uid=someone,ou=people,dc=example,dc=org", []ldap.Control{})
 	mod.Replace("sn", []string{"One"})
 	mod.Add("givenName", []string{"Some"})
 	mod.Delete("mail", []string{})
@@ -190,7 +191,7 @@ cn: Someone
 mail: someone@example.org
 
 `
-	add := ldap.NewAddRequest("uid=someone,ou=people,dc=example,dc=org")
+	add := ldap.NewAddRequest("uid=someone,ou=people,dc=example,dc=org", []ldap.Control{})
 	for _, a := range entries[1].Attributes {
 		add.Attribute(a.Name, a.Values)
 	}

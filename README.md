@@ -5,7 +5,7 @@ Utilities for working with ldif data. This implements most of RFC 2849.
 ## Change Entries
 
 Support for moddn / modrdn changes is missing (in Unmarshal and
-Marshal) - gopkg.in/ldap.v2 does not support it currently
+Marshal) - github.com/go-ldap/ldap/v3 does not support it currently
 
 ## Controls
 
