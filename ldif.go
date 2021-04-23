@@ -133,6 +133,9 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 				default:
 					isComment = false
 					if len(line) != 0 {
+						strArray := strings.Fields(line)
+						strArray[0] = strings.ToLower(strArray[0])
+						line = strings.Join(strArray, " ")
 						lines = append(lines, line)
 					}
 					line = nextLine
@@ -307,12 +310,12 @@ func (l *LDIF) parseLine(line string) (attr, val string, err error) {
 	for len(line) > off && line[off] != ':' {
 		off++
 		if off >= len(line) {
-			err = fmt.Errorf("Missing : in line `%s`", line)
+			err = fmt.Errorf("missing : in line `%s`", line)
 			return
 		}
 	}
 	if off == len(line) {
-		err = fmt.Errorf("Missing : in the line `%s`", line)
+		err = fmt.Errorf("missing : in the line `%s`", line)
 		return
 	}
 
@@ -487,7 +490,7 @@ func validOID(oid string) error {
 		case c >= '0' && c <= '9':
 			lastDot = false
 		default:
-			return errors.New("Invalid character in OID")
+			return errors.New("invalid character in OID")
 		}
 	}
 	return nil
