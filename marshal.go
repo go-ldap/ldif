@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/go-ldap/ldap/v3"
 )
@@ -24,8 +25,9 @@ func Marshal(l *LDIF) (data string, err error) {
 	hasEntry := false
 	hasChange := false
 
+	var builder strings.Builder
 	if l.Version > 0 {
-		data = "version: 1\n"
+		builder.WriteString("version: 1\n")
 	}
 
 	fw := l.FoldWidth
@@ -40,8 +42,8 @@ func Marshal(l *LDIF) (data string, err error) {
 			if hasEntry {
 				return "", ErrMixed
 			}
-			data += foldLine("dn: "+e.Add.DN, fw) + "\n"
-			data += "changetype: add\n"
+			builder.WriteString(foldLine("dn: "+e.Add.DN, fw) + "\n")
+			builder.WriteString("changetype: add\n")
 			for _, add := range e.Add.Attributes {
 				if len(add.Vals) == 0 {
 					return "", errors.New("changetype 'add' requires non empty value list")
@@ -52,7 +54,7 @@ func Marshal(l *LDIF) (data string, err error) {
 					if t {
 						col = ":: "
 					}
-					data += foldLine(add.Type+col+ev, fw) + "\n"
+					builder.WriteString(foldLine(add.Type+col+ev, fw) + "\n")
 				}
 			}
 
@@ -61,16 +63,16 @@ func Marshal(l *LDIF) (data string, err error) {
 			if hasEntry {
 				return "", ErrMixed
 			}
-			data += foldLine("dn: "+e.Del.DN, fw) + "\n"
-			data += "changetype: delete\n"
+			builder.WriteString(foldLine("dn: "+e.Del.DN, fw) + "\n")
+			builder.WriteString("changetype: delete\n")
 
 		case e.Modify != nil:
 			hasChange = true
 			if hasEntry {
 				return "", ErrMixed
 			}
-			data += foldLine("dn: "+e.Modify.DN, fw) + "\n"
-			data += "changetype: modify\n"
+			builder.WriteString(foldLine("dn: "+e.Modify.DN, fw) + "\n")
+			builder.WriteString("changetype: modify\n")
 			for _, mod := range e.Modify.Changes {
 				switch mod.Operation {
 				// add operation - https://tools.ietf.org/html/rfc4511#section-4.6
@@ -79,43 +81,43 @@ func Marshal(l *LDIF) (data string, err error) {
 						return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
 					}
 
-					data += "add: " + mod.Modification.Type + "\n"
+					builder.WriteString("add: " + mod.Modification.Type + "\n")
 					for _, v := range mod.Modification.Vals {
 						ev, t := encodeValue(v)
 						col := ": "
 						if t {
 							col = ":: "
 						}
-						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
+						builder.WriteString(foldLine(mod.Modification.Type+col+ev, fw) + "\n")
 					}
-					data += "-\n"
+					builder.WriteString("-\n")
 				// delete operation - https://tools.ietf.org/html/rfc4511#section-4.6
 				case 1:
-					data += "delete: " + mod.Modification.Type + "\n"
+					builder.WriteString("delete: " + mod.Modification.Type + "\n")
 					for _, v := range mod.Modification.Vals {
 						ev, t := encodeValue(v)
 						col := ": "
 						if t {
 							col = ":: "
 						}
-						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
+						builder.WriteString(foldLine(mod.Modification.Type+col+ev, fw) + "\n")
 					}
-					data += "-\n"
+					builder.WriteString("-\n")
 				// replace operation - https://tools.ietf.org/html/rfc4511#section-4.6
 				case 2:
 					if len(mod.Modification.Vals) == 0 {
 						return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
 					}
-					data += "replace: " + mod.Modification.Type + "\n"
+					builder.WriteString("replace: " + mod.Modification.Type + "\n")
 					for _, v := range mod.Modification.Vals {
 						ev, t := encodeValue(v)
 						col := ": "
 						if t {
 							col = ":: "
 						}
-						data += foldLine(mod.Modification.Type+col+ev, fw) + "\n"
+						builder.WriteString(foldLine(mod.Modification.Type+col+ev, fw) + "\n")
 					}
-					data += "-\n"
+					builder.WriteString("-\n")
 				default:
 					return "", fmt.Errorf("invalid type %s in modify request", mod.Modification.Type)
 				}
@@ -125,7 +127,7 @@ func Marshal(l *LDIF) (data string, err error) {
 			if hasChange {
 				return "", ErrMixed
 			}
-			data += foldLine("dn: "+e.Entry.DN, fw) + "\n"
+			builder.WriteString(foldLine("dn: "+e.Entry.DN, fw) + "\n")
 			for _, av := range e.Entry.Attributes {
 				for _, v := range av.Values {
 					ev, t := encodeValue(v)
@@ -133,13 +135,13 @@ func Marshal(l *LDIF) (data string, err error) {
 					if t {
 						col = ":: "
 					}
-					data += foldLine(av.Name+col+ev, fw) + "\n"
+					builder.WriteString(foldLine(av.Name+col+ev, fw) + "\n")
 				}
 			}
 		}
-		data += "\n"
+		builder.WriteString("\n")
 	}
-	return data, nil
+	return builder.String(), nil
 }
 
 func encodeValue(value string) (string, bool) {

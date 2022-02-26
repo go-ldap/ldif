@@ -146,6 +146,7 @@ func BenchmarkMarshalNEntries(b *testing.B) {
 	benchmarker(100)
 	benchmarker(1000)
 	benchmarker(10000)
+	benchmarker(100000)
 }
 
 func TestMarshalSingleEntry(t *testing.T) {
