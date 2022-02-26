@@ -2,6 +2,8 @@ package ldif_test
 
 import (
 	"bytes"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/go-ldap/ldap/v3"
@@ -69,6 +71,81 @@ var entries = []*ldap.Entry{
 			},
 		},
 	},
+}
+
+func nPeople(n int) ([]*ldap.Entry, string) {
+	nEntries := make([]*ldap.Entry, n+1)
+	var builder strings.Builder
+
+	nEntries[0] = entries[0]
+	builder.WriteString(ouLDIF)
+
+	for i := 1; i <= n; i++ {
+		nEntries[i] = &ldap.Entry{
+			DN: fmt.Sprintf("uid=someone%d,ou=people,dc=example,dc=org", i),
+			Attributes: []*ldap.EntryAttribute{
+				{
+					Name: "objectClass",
+					Values: []string{
+						"top",
+						"person",
+						"organizationalPerson",
+						"inetOrgPerson",
+					},
+				},
+				{
+					Name:   "uid",
+					Values: []string{fmt.Sprintf("someone%d", i)},
+				},
+				{
+					Name:   "cn",
+					Values: []string{fmt.Sprintf("Someone%d", i)},
+				},
+				{
+					Name:   "mail",
+					Values: []string{fmt.Sprintf("someone%d@example.org", i)},
+				},
+			},
+		}
+
+		builder.WriteString(fmt.Sprintf(""+
+			"dn: uid=someone%d,ou=people,dc=example,dc=org\n"+
+			"objectClass: top\n"+
+			"objectClass: person\n"+
+			"objectClass: organizationalPerson\n"+
+			"objectClass: inetOrgPerson\n"+
+			"uid: someone%d\n"+
+			"cn: Someone%d\n"+
+			"mail: someone%d@example.org\n"+
+			"\n",
+			i, i, i, i))
+	}
+
+	return nEntries, builder.String()
+}
+
+func BenchmarkMarshalNEntries(b *testing.B) {
+	benchmarker := func(n int) {
+		b.Run(fmt.Sprintf("marshal %d", n), func(b *testing.B) {
+			entries, expected := nPeople(n)
+			ldifEntries := make([]*ldif.Entry, len(entries))
+			for i, entry := range entries {
+				ldifEntries[i] = &ldif.Entry{Entry: entry}
+			}
+			l := &ldif.LDIF{Entries: ldifEntries}
+			actual, err := ldif.Marshal(l)
+			if err != nil {
+				b.Errorf("Failed to marshal entry: %s", err)
+			}
+			if actual != expected {
+				b.Errorf("expected: >>%s<<\nactual: >>%s<<\n", expected, actual)
+			}
+		})
+	}
+
+	benchmarker(100)
+	benchmarker(1000)
+	benchmarker(10000)
 }
 
 func TestMarshalSingleEntry(t *testing.T) {
