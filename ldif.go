@@ -31,10 +31,10 @@ type Entry struct {
 type LDIF struct {
 	Entries    []*Entry
 	Version    int
-	changeType string
+	ChangeType string
 	FoldWidth  int
 	Controls   bool
-	firstEntry bool
+	FirstEntry bool
 }
 
 // The ParseError holds the error message and the line in the ldif
@@ -82,14 +82,14 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 	}
 	curLine := 0
 	l.Version = 0
-	l.changeType = ""
+	l.ChangeType = ""
 	isComment := false
 
 	reader := bufio.NewReader(r)
 
 	var lines []string
 	var line, nextLine string
-	l.firstEntry = true
+	l.FirstEntry = true
 
 	for {
 		curLine++
@@ -107,7 +107,7 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 					continue
 				}
 				lines = append(lines, line)
-				entry, perr := l.parseEntry(lines)
+				entry, perr := l.ParseEntry(lines)
 				if perr != nil {
 					return &ParseError{Line: curLine, Message: perr.Error()}
 				}
@@ -145,13 +145,13 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 	}
 }
 
-func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
+func (l *LDIF) ParseEntry(lines []string) (entry *Entry, err error) {
 	if len(lines) == 0 {
 		return nil, errors.New("empty entry?")
 	}
 
-	if l.firstEntry && strings.HasPrefix(lines[0], "version:") {
-		l.firstEntry = false
+	if l.FirstEntry && strings.HasPrefix(lines[0], "version:") {
+		l.FirstEntry = false
 		line := strings.TrimLeft(lines[0][8:], spaces)
 		if l.Version, err = strconv.Atoi(line); err != nil {
 			return nil, err
@@ -167,7 +167,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 		}
 		lines = lines[1:]
 	}
-	l.firstEntry = false
+	l.FirstEntry = false
 
 	if len(lines) == 0 {
 		return nil, nil
@@ -176,7 +176,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 	if !strings.HasPrefix(lines[0], "dn:") {
 		return nil, errors.New("missing 'dn:'")
 	}
-	_, val, err := l.parseLine(lines[0])
+	_, val, err := l.ParseLine(lines[0])
 	if err != nil {
 		return nil, err
 	}
@@ -188,34 +188,34 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 	lines = lines[1:]
 
 	var controls []ldap.Control
-	controls, lines, err = l.parseControls(lines)
+	controls, lines, err = l.ParseControls(lines)
 	if err != nil {
 		return nil, err
 	}
 
 	if strings.HasPrefix(lines[0], "changetype:") {
-		_, val, err := l.parseLine(lines[0])
+		_, val, err := l.ParseLine(lines[0])
 		if err != nil {
 			return nil, err
 		}
-		l.changeType = val
+		l.ChangeType = val
 		if len(lines) > 1 {
 			lines = lines[1:]
 		}
 	}
-	switch l.changeType {
+	switch l.ChangeType {
 	case "":
 		if len(controls) != 0 {
 			return nil, errors.New("controls found without changetype")
 		}
-		attrs, err := l.parseAttrs(lines)
+		attrs, err := l.ParseAttrs(lines)
 		if err != nil {
 			return nil, err
 		}
 		return &Entry{Entry: ldap.NewEntry(dn, attrs)}, nil
 
 	case "add":
-		attrs, err := l.parseAttrs(lines)
+		attrs, err := l.ParseAttrs(lines)
 		if err != nil {
 			return nil, err
 		}
@@ -266,7 +266,7 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 				}
 				continue
 			}
-			attr, val, err := l.parseLine(lines[i])
+			attr, val, err := l.ParseLine(lines[i])
 			if err != nil {
 				return nil, err
 			}
@@ -290,10 +290,10 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 	}
 }
 
-func (l *LDIF) parseAttrs(lines []string) (map[string][]string, error) {
+func (l *LDIF) ParseAttrs(lines []string) (map[string][]string, error) {
 	attrs := make(map[string][]string)
 	for i := 0; i < len(lines); i++ {
-		attr, val, err := l.parseLine(lines[i])
+		attr, val, err := l.ParseLine(lines[i])
 		if err != nil {
 			return nil, err
 		}
@@ -302,7 +302,7 @@ func (l *LDIF) parseAttrs(lines []string) (map[string][]string, error) {
 	return attrs, nil
 }
 
-func (l *LDIF) parseLine(line string) (attr, val string, err error) {
+func (l *LDIF) ParseLine(line string) (attr, val string, err error) {
 	off := 0
 	for len(line) > off && line[off] != ':' {
 		off++
@@ -349,7 +349,7 @@ func (l *LDIF) parseLine(line string) (attr, val string, err error) {
 	return
 }
 
-func (l *LDIF) parseControls(lines []string) ([]ldap.Control, []string, error) {
+func (l *LDIF) ParseControls(lines []string) ([]ldap.Control, []string, error) {
 	var controls []ldap.Control
 	for {
 		if !strings.HasPrefix(lines[0], "control:") {
@@ -363,7 +363,7 @@ func (l *LDIF) parseControls(lines []string) ([]ldap.Control, []string, error) {
 			continue
 		}
 
-		_, val, err := l.parseLine(lines[0])
+		_, val, err := l.ParseLine(lines[0])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -451,7 +451,7 @@ func (l *LDIF) parseControls(lines []string) ([]ldap.Control, []string, error) {
 	return controls, lines, nil
 }
 
-func readURLValue(val string) (string, error) {
+func ReadURLValue(val string) (string, error) {
 	u, err := url.Parse(val)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse URL: %s", err)
@@ -467,7 +467,7 @@ func readURLValue(val string) (string, error) {
 	return val, nil
 }
 
-func decodeBase64(enc string) (string, error) {
+func DecodeBase64(enc string) (string, error) {
 	dec := make([]byte, base64.StdEncoding.DecodedLen(len([]byte(enc))))
 	n, err := base64.StdEncoding.Decode(dec, []byte(enc))
 	if err != nil {
@@ -476,7 +476,7 @@ func decodeBase64(enc string) (string, error) {
 	return string(dec[:n]), nil
 }
 
-func validOID(oid string) error {
+func ValidOID(oid string) error {
 	lastDot := true
 	for _, c := range oid {
 		switch {
@@ -493,7 +493,7 @@ func validOID(oid string) error {
 	return nil
 }
 
-func validAttr(attr string) error {
+func ValidAttr(attr string) error {
 	if len(attr) == 0 {
 		return errors.New("empty attribute name")
 	}
