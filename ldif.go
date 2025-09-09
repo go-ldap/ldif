@@ -91,6 +91,23 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 // The caller is responsible for closing the io.Reader if that is needed.
 func UnmarshalEntries(r io.Reader, l *LDIF) iter.Seq2[*Entry, error] {
 	return func(yield func(*Entry, error) bool) {
+		for e, err := range unmarshalEntries(r, l) {
+			if err == nil && e == nil {
+				// I couldn't find use-case where the entry and the error is both nil,
+				// but I saw helper functions to help avoid them,
+				// so I added this logic here, to skip nil entries
+				// while preserving Unmarshal's original behaviour.
+				continue
+			}
+			if !yield(e, err) {
+				return
+			}
+		}
+	}
+}
+
+func unmarshalEntries(r io.Reader, l *LDIF) iter.Seq2[*Entry, error] {
+	return func(yield func(*Entry, error) bool) {
 		if r == nil {
 			yield(nil, &ParseError{Line: 0, Message: "No reader present"})
 			return

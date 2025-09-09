@@ -71,6 +71,19 @@ func TestUnmarshalEntries(t *testing.T) {
 			t.Fatal("RFC 2849 example: expected that reader is fully consumed")
 		}
 	})
+
+	t.Run("empty", func(t *testing.T) {
+		var source = strings.NewReader("")
+		for e, err := range ldif.UnmarshalEntries(source, &ldif.LDIF{}) {
+			if err != nil {
+				t.Fatalf("unexpected error while unmarshaling ldif example: %s", err.Error())
+			}
+			if e == nil {
+				t.Fatalf("unexpected nil entry: %s", err.Error())
+			}
+		}
+	})
+
 	t.Run("rainy", func(t *testing.T) {
 		t.Run("absent reader", func(t *testing.T) {
 			var (
