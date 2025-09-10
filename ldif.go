@@ -8,8 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"iter"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -77,70 +78,108 @@ func ParseWithControls(str string) (l *LDIF, err error) {
 // The caller is responsible for closing the io.Reader if that is
 // needed.
 func Unmarshal(r io.Reader, l *LDIF) (err error) {
-	if r == nil {
-		return &ParseError{Line: 0, Message: "No reader present"}
+	for entry, err := range UnmarshalEntries(r, l) {
+		if err != nil {
+			return err
+		}
+		l.Entries = append(l.Entries, entry)
 	}
-	curLine := 0
-	l.Version = 0
-	l.changeType = ""
-	isComment := false
+	return nil
+}
 
-	reader := bufio.NewReader(r)
+// UnmarshalEntries parses the LDIF from the given io.Reader and yield the individual entries during an iteration.
+// The caller is responsible for closing the io.Reader if that is needed.
+func UnmarshalEntries(r io.Reader, l *LDIF) iter.Seq2[*Entry, error] {
+	return func(yield func(*Entry, error) bool) {
+		for e, err := range unmarshalEntries(r, l) {
+			if err == nil && e == nil {
+				// I couldn't find use-case where the entry and the error is both nil,
+				// but I saw helper functions to help avoid them,
+				// so I added this logic here, to skip nil entries
+				// while preserving Unmarshal's original behaviour.
+				continue
+			}
+			if !yield(e, err) {
+				return
+			}
+		}
+	}
+}
 
-	var lines []string
-	var line, nextLine string
-	l.firstEntry = true
+func unmarshalEntries(r io.Reader, l *LDIF) iter.Seq2[*Entry, error] {
+	return func(yield func(*Entry, error) bool) {
+		if r == nil {
+			yield(nil, &ParseError{Line: 0, Message: "No reader present"})
+			return
+		}
 
-	for {
-		curLine++
-		nextLine, err = reader.ReadString(lf)
-		nextLine = strings.TrimRight(nextLine, sep)
+		curLine := 0
+		l.Version = 0
+		l.changeType = ""
+		isComment := false
 
-		switch err {
-		case nil, io.EOF:
-			switch len(nextLine) {
-			case 0:
-				if len(line) == 0 && err == io.EOF {
-					return nil
-				}
-				if len(line) == 0 && len(lines) == 0 {
-					continue
-				}
-				lines = append(lines, line)
-				entry, perr := l.parseEntry(lines)
-				if perr != nil {
-					return &ParseError{Line: curLine, Message: perr.Error()}
-				}
-				l.Entries = append(l.Entries, entry)
-				line = ""
-				lines = []string{}
-				if err == io.EOF {
-					return nil
-				}
-			default:
-				switch nextLine[0] {
-				case comment:
-					isComment = true
-					continue
+		reader := bufio.NewReader(r)
 
-				case space:
-					if isComment {
+		var lines []string
+		var line, nextLine string
+		l.firstEntry = true
+
+		for {
+			curLine++
+			var err error
+			nextLine, err = reader.ReadString(lf)
+			nextLine = strings.TrimRight(nextLine, sep)
+
+			switch err {
+			case nil, io.EOF:
+				switch len(nextLine) {
+				case 0:
+					if len(line) == 0 && err == io.EOF {
+						return
+					}
+					if len(line) == 0 && len(lines) == 0 {
 						continue
 					}
-					line += nextLine[1:]
-					continue
-
-				default:
-					isComment = false
-					if len(line) != 0 {
-						lines = append(lines, line)
+					lines = append(lines, line)
+					entry, perr := l.parseEntry(lines)
+					if perr != nil {
+						yield(nil, &ParseError{Line: curLine, Message: perr.Error()})
+						return
 					}
-					line = nextLine
-					continue
+					if !yield(entry, nil) {
+						return
+					}
+					line = ""
+					lines = []string{}
+					if err == io.EOF {
+						return
+					}
+				default:
+					switch nextLine[0] {
+					case comment:
+						isComment = true
+						continue
+
+					case space:
+						if isComment {
+							continue
+						}
+						line += nextLine[1:]
+						continue
+
+					default:
+						isComment = false
+						if len(line) != 0 {
+							lines = append(lines, line)
+						}
+						line = nextLine
+						continue
+					}
 				}
+			default:
+				yield(nil, &ParseError{Line: curLine, Message: err.Error()})
+				return
 			}
-		default:
-			return &ParseError{Line: curLine, Message: err.Error()}
 		}
 	}
 }
@@ -459,7 +498,7 @@ func readURLValue(val string) (string, error) {
 	if u.Scheme != "file" {
 		return "", fmt.Errorf("unsupported URL scheme %s", u.Scheme)
 	}
-	data, err := ioutil.ReadFile(toPath(u))
+	data, err := os.ReadFile(toPath(u))
 	if err != nil {
 		return "", fmt.Errorf("failed to read %s: %s", u.Path, err)
 	}

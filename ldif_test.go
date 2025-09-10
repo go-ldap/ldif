@@ -1,9 +1,12 @@
 package ldif_test
 
 import (
-	"io/ioutil"
+	"errors"
+	"io"
 	"os"
+	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/go-ldap/ldif"
@@ -39,6 +42,91 @@ func TestLDIFParseRFC2849Example(t *testing.T) {
 	if l.Entries[1].Entry.GetAttributeValues("sn")[0] != "Jensen" {
 		t.Errorf("RFC 2849 example: empty 'sn' in second entry")
 	}
+}
+
+func TestUnmarshalEntries(t *testing.T) {
+	t.Run("RFC 2849 example", func(t *testing.T) {
+		var (
+			source  = strings.NewReader(ldifRFC2849Example)
+			entries []*ldif.Entry
+		)
+		for e, err := range ldif.UnmarshalEntries(source, &ldif.LDIF{}) {
+			if err != nil {
+				t.Fatalf("unexpected error while unmarshaling ldif example: %s", err.Error())
+			}
+			entries = append(entries, e)
+		}
+		if len(entries) < 2 {
+			t.Fatalf("expected that after unmarshaling the entries, it should yield results")
+		}
+		second := entries[1]
+		if second.Entry.GetAttributeValues("sn")[0] != "Jensen" {
+			t.Fatal("RFC 2849 example: empty 'sn' in second entry")
+		}
+		if second.Entry.GetAttributeValues("sn")[0] != "Jensen" {
+			t.Fatal("RFC 2849 example: empty 'sn' in second entry")
+		}
+		if _, err := source.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+			t.Fatal("RFC 2849 example: expected that reader is fully consumed")
+		}
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		var source = strings.NewReader("")
+		for e, err := range ldif.UnmarshalEntries(source, &ldif.LDIF{}) {
+			if err != nil {
+				t.Fatalf("unexpected error while unmarshaling ldif example: %s", err.Error())
+			}
+			if e == nil {
+				t.Fatalf("unexpected nil entry: %s", err.Error())
+			}
+		}
+	})
+
+	t.Run("rainy", func(t *testing.T) {
+		t.Run("absent reader", func(t *testing.T) {
+			var (
+				err error
+				n   int
+			)
+			for _, got := range ldif.UnmarshalEntries(nil, &ldif.LDIF{}) {
+				n++
+				err = got
+			}
+			if n != 1 {
+				t.Fatalf("unexpected iteration count: %d", n)
+			}
+			var target *ldif.ParseError
+			if !errors.As(err, &target) {
+				t.Fatalf("unexpected error returned: %#v", err)
+			}
+			if target == nil {
+				t.Fatalf("ParseError was unexpectedly nil")
+			}
+			if *target == (ldif.ParseError{}) {
+				t.Fatalf("ParseError was unexpectedly empty")
+			}
+		})
+		t.Run("io reader error", func(t *testing.T) {
+			var (
+				expErr = errors.New("boom")
+				source = iotest.ErrReader(expErr)
+				ok     bool
+			)
+			for _, err := range ldif.UnmarshalEntries(source, &ldif.LDIF{}) {
+				ok = true
+				if err == nil {
+					t.Fatal("expected error but got nothing")
+				}
+				if !strings.Contains(err.Error(), expErr.Error()) {
+					t.Fatalf("unexpected error is returned: %#v", err)
+				}
+			}
+			if !ok {
+				t.Fatal("error is not propagated back from the iterator")
+			}
+		})
+	})
 }
 
 var ldifEmpty = `dn: uid=someone,dc=example,dc=org
@@ -167,7 +255,7 @@ func TestLDIFMultiSpace(t *testing.T) {
 }
 
 func TestLDIFURL(t *testing.T) {
-	f, err := ioutil.TempFile("", "ldifurl")
+	f, err := os.CreateTemp("", "ldifurl")
 	if err != nil {
 		t.Errorf("Failed to create temp file: %s", err)
 	}
