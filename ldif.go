@@ -8,9 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"iter"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -498,7 +498,7 @@ func readURLValue(val string) (string, error) {
 	if u.Scheme != "file" {
 		return "", fmt.Errorf("unsupported URL scheme %s", u.Scheme)
 	}
-	data, err := ioutil.ReadFile(toPath(u))
+	data, err := os.ReadFile(toPath(u))
 	if err != nil {
 		return "", fmt.Errorf("failed to read %s: %s", u.Path, err)
 	}
