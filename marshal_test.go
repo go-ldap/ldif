@@ -3,6 +3,8 @@ package ldif_test
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -125,28 +127,86 @@ func nPeople(n int) ([]*ldap.Entry, string) {
 }
 
 func BenchmarkMarshalNEntries(b *testing.B) {
-	benchmarker := func(n int) {
-		b.Run(fmt.Sprintf("marshal %d", n), func(b *testing.B) {
+	benchmarker := func(n int, stream string, writeWith func(callback func(writer io.Writer, reader io.Reader) error) error) {
+		b.Run(fmt.Sprintf("marshal %d %s", n, stream), func(b *testing.B) {
 			entries, expected := nPeople(n)
 			ldifEntries := make([]*ldif.Entry, len(entries))
 			for i, entry := range entries {
 				ldifEntries[i] = &ldif.Entry{Entry: entry}
 			}
 			l := &ldif.LDIF{Entries: ldifEntries}
-			actual, err := ldif.Marshal(l)
+
+			err := writeWith(func(writer io.Writer, reader io.Reader) error {
+				err := ldif.MarshalStreaming(l, writer)
+				if err != nil {
+					return err
+				}
+
+				if seeker, ok := reader.(io.Seeker); ok {
+					_, err := seeker.Seek(0, io.SeekStart)
+					if err != nil {
+						return err
+					}
+				}
+
+				all, err := io.ReadAll(reader)
+				if err != nil {
+					return err
+				}
+
+				actual := string(all)
+
+				if actual != expected {
+					b.Errorf("expected: >>%s<<\nactual: >>%s<<\n", expected, actual)
+				}
+
+				return nil
+			})
+
 			if err != nil {
 				b.Errorf("Failed to marshal entry: %s", err)
-			}
-			if actual != expected {
-				b.Errorf("expected: >>%s<<\nactual: >>%s<<\n", expected, actual)
 			}
 		})
 	}
 
-	benchmarker(100)
-	benchmarker(1000)
-	benchmarker(10000)
-	benchmarker(100000)
+	writers := []struct {
+		name      string
+		writeWith func(callback func(writer io.Writer, reader io.Reader) error) error
+	}{
+		{
+			name: "file",
+			writeWith: func(callback func(writer io.Writer, reader io.Reader) error) error {
+				file, err := os.CreateTemp(os.TempDir(), "ldif_test")
+
+				if err != nil {
+					return err
+				}
+
+				err = callback(file, file)
+
+				if err != nil {
+					return err
+				}
+
+				return file.Close()
+			},
+		},
+		{
+			name: "bytebuffer",
+			writeWith: func(callback func(writer io.Writer, reader io.Reader) error) error {
+				var b bytes.Buffer
+				return callback(&b, &b)
+			},
+		},
+	}
+
+	for _, tt := range writers {
+		benchmarker(100, tt.name, tt.writeWith)
+		benchmarker(1000, tt.name, tt.writeWith)
+		benchmarker(10000, tt.name, tt.writeWith)
+		benchmarker(100000, tt.name, tt.writeWith)
+	}
+
 }
 
 func TestMarshalSingleEntry(t *testing.T) {
