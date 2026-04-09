@@ -22,12 +22,23 @@ var ErrMixed = errors.New("cannot mix change records and content records")
 // the fw parameter to something else than 0.
 // For a fold width < 0, no folding will be done, with 0, the default is used.
 func Marshal(l *LDIF) (data string, err error) {
+	var builder strings.Builder
+	err = MarshalStreaming(l, &builder)
+	if err != nil {
+		return "", err
+	}
+	return builder.String(), nil
+}
+
+func MarshalStreaming(l *LDIF, writer io.Writer) (err error) {
 	hasEntry := false
 	hasChange := false
 
-	var builder strings.Builder
 	if l.Version > 0 {
-		builder.WriteString("version: 1\n")
+		_, err := io.WriteString(writer, "version: 1\n")
+		if err != nil {
+			return err
+		}
 	}
 
 	fw := l.FoldWidth
@@ -40,13 +51,22 @@ func Marshal(l *LDIF) (data string, err error) {
 		case e.Add != nil:
 			hasChange = true
 			if hasEntry {
-				return "", ErrMixed
+				return ErrMixed
 			}
-			builder.WriteString(foldLine("dn: "+e.Add.DN, fw) + "\n")
-			builder.WriteString("changetype: add\n")
+
+			_, err := io.WriteString(writer, foldLine("dn: "+e.Add.DN, fw)+"\n")
+			if err != nil {
+				return err
+			}
+
+			_, err = io.WriteString(writer, "changetype: add\n")
+			if err != nil {
+				return err
+			}
+
 			for _, add := range e.Add.Attributes {
 				if len(add.Vals) == 0 {
-					return "", errors.New("changetype 'add' requires non empty value list")
+					return errors.New("changetype 'add' requires non empty value list")
 				}
 				for _, v := range add.Vals {
 					ev, t := encodeValue(v)
@@ -54,80 +74,137 @@ func Marshal(l *LDIF) (data string, err error) {
 					if t {
 						col = ":: "
 					}
-					builder.WriteString(foldLine(add.Type+col+ev, fw) + "\n")
+
+					_, err = io.WriteString(writer, foldLine(add.Type+col+ev, fw)+"\n")
+					if err != nil {
+						return err
+					}
 				}
 			}
 
 		case e.Del != nil:
 			hasChange = true
 			if hasEntry {
-				return "", ErrMixed
+				return ErrMixed
 			}
-			builder.WriteString(foldLine("dn: "+e.Del.DN, fw) + "\n")
-			builder.WriteString("changetype: delete\n")
+
+			_, err = io.WriteString(writer, foldLine("dn: "+e.Del.DN, fw)+"\n")
+			if err != nil {
+				return err
+			}
+
+			_, err = io.WriteString(writer, "changetype: delete\n")
+			if err != nil {
+				return err
+			}
 
 		case e.Modify != nil:
 			hasChange = true
 			if hasEntry {
-				return "", ErrMixed
+				return ErrMixed
 			}
-			builder.WriteString(foldLine("dn: "+e.Modify.DN, fw) + "\n")
-			builder.WriteString("changetype: modify\n")
+
+			_, err = io.WriteString(writer, foldLine("dn: "+e.Modify.DN, fw)+"\n")
+			if err != nil {
+				return err
+			}
+
+			_, err = io.WriteString(writer, "changetype: modify\n")
+			if err != nil {
+				return err
+			}
+
 			for _, mod := range e.Modify.Changes {
 				switch mod.Operation {
 				// add operation - https://tools.ietf.org/html/rfc4511#section-4.6
 				case 0:
 					if len(mod.Modification.Vals) == 0 {
-						return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
+						return errors.New("changetype 'modify', op 'add' requires non empty value list")
 					}
 
-					builder.WriteString("add: " + mod.Modification.Type + "\n")
+					_, err = io.WriteString(writer, "add: "+mod.Modification.Type+"\n")
+					if err != nil {
+						return err
+					}
+
 					for _, v := range mod.Modification.Vals {
 						ev, t := encodeValue(v)
 						col := ": "
 						if t {
 							col = ":: "
 						}
-						builder.WriteString(foldLine(mod.Modification.Type+col+ev, fw) + "\n")
+
+						_, err = io.WriteString(writer, foldLine(mod.Modification.Type+col+ev, fw)+"\n")
+						if err != nil {
+							return err
+						}
 					}
-					builder.WriteString("-\n")
+					_, err = io.WriteString(writer, "-\n")
+					if err != nil {
+						return err
+					}
 				// delete operation - https://tools.ietf.org/html/rfc4511#section-4.6
 				case 1:
-					builder.WriteString("delete: " + mod.Modification.Type + "\n")
+					_, err = io.WriteString(writer, "delete: "+mod.Modification.Type+"\n")
+					if err != nil {
+						return err
+					}
+
 					for _, v := range mod.Modification.Vals {
 						ev, t := encodeValue(v)
 						col := ": "
 						if t {
 							col = ":: "
 						}
-						builder.WriteString(foldLine(mod.Modification.Type+col+ev, fw) + "\n")
+						_, err = io.WriteString(writer, foldLine(mod.Modification.Type+col+ev, fw)+"\n")
+						if err != nil {
+							return err
+						}
 					}
-					builder.WriteString("-\n")
+					_, err = io.WriteString(writer, "-\n")
+					if err != nil {
+						return err
+					}
 				// replace operation - https://tools.ietf.org/html/rfc4511#section-4.6
 				case 2:
 					if len(mod.Modification.Vals) == 0 {
-						return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
+						return errors.New("changetype 'modify', op 'replace' requires non empty value list")
 					}
-					builder.WriteString("replace: " + mod.Modification.Type + "\n")
+					_, err = io.WriteString(writer, "replace: "+mod.Modification.Type+"\n")
+					if err != nil {
+						return err
+					}
 					for _, v := range mod.Modification.Vals {
 						ev, t := encodeValue(v)
 						col := ": "
 						if t {
 							col = ":: "
 						}
-						builder.WriteString(foldLine(mod.Modification.Type+col+ev, fw) + "\n")
+
+						_, err = io.WriteString(writer, foldLine(mod.Modification.Type+col+ev, fw)+"\n")
+						if err != nil {
+							return err
+						}
 					}
-					builder.WriteString("-\n")
+					_, err = io.WriteString(writer, "-\n")
+					if err != nil {
+						return err
+					}
 				default:
-					return "", fmt.Errorf("invalid type %s in modify request", mod.Modification.Type)
+					return fmt.Errorf("invalid type %s in modify request", mod.Modification.Type)
 				}
 			}
 		default:
 			hasEntry = true
 			if hasChange {
-				return "", ErrMixed
+				return ErrMixed
 			}
-			builder.WriteString(foldLine("dn: "+e.Entry.DN, fw) + "\n")
+
+			_, err = io.WriteString(writer, foldLine("dn: "+e.Entry.DN, fw)+"\n")
+			if err != nil {
+				return err
+			}
+
 			for _, av := range e.Entry.Attributes {
 				for _, v := range av.Values {
 					ev, t := encodeValue(v)
@@ -135,13 +212,19 @@ func Marshal(l *LDIF) (data string, err error) {
 					if t {
 						col = ":: "
 					}
-					builder.WriteString(foldLine(av.Name+col+ev, fw) + "\n")
+					_, err = io.WriteString(writer, foldLine(av.Name+col+ev, fw)+"\n")
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
-		builder.WriteString("\n")
+		_, err = io.WriteString(writer, "\n")
+		if err != nil {
+			return err
+		}
 	}
-	return builder.String(), nil
+	return nil
 }
 
 func encodeValue(value string) (string, bool) {
@@ -193,11 +276,7 @@ func Dump(fh io.Writer, fw int, entries ...interface{}) error {
 		return err
 	}
 	l.FoldWidth = fw
-	str, err := Marshal(l)
-	if err != nil {
-		return err
-	}
-	_, err = fh.Write([]byte(str))
+	err = MarshalStreaming(l, fh)
 	return err
 }
 
