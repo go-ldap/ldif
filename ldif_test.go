@@ -134,10 +134,78 @@ cn:
 cn: Some User
 `
 
+// RFC 2849 note 5: a zero-length value is represented as "attr:" and MUST be
+// supported (e.g. "seeAlso:").
 func TestLDIFParseEmptyAttr(t *testing.T) {
-	_, err := ldif.Parse(ldifEmpty)
-	if err == nil {
-		t.Errorf("Did not fail to parse empty attribute")
+	l, err := ldif.Parse(ldifEmpty)
+	if err != nil {
+		t.Fatalf("Failed to parse empty attribute value: %s", err)
+	}
+	vals := l.Entries[0].Entry.GetAttributeValues("cn")
+	if len(vals) != 2 {
+		t.Fatalf("expected 2 cn values, got %d: %#v", len(vals), vals)
+	}
+	if vals[0] != "" {
+		t.Errorf("expected first cn value to be empty, got %q", vals[0])
+	}
+	if vals[1] != "Some User" {
+		t.Errorf("expected second cn value %q, got %q", "Some User", vals[1])
+	}
+}
+
+// RFC 2849 note 5 represents a zero-length value as "AttributeDescription ':'
+// FILL SEP", where FILL is *SPACE. So both "seeAlso:" and "seeAlso:   " denote
+// an empty value, and they exercise different branches of parseLine (the bare
+// colon-terminated line vs. the trailing-space path).
+func TestLDIFParseZeroLengthValue(t *testing.T) {
+	for name, in := range map[string]string{
+		"no fill":   "dn: uid=someone,dc=example,dc=org\nseeAlso:\nsn: Some One\n",
+		"with fill": "dn: uid=someone,dc=example,dc=org\nseeAlso:   \nsn: Some One\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			l, err := ldif.Parse(in)
+			if err != nil {
+				t.Fatalf("Failed to parse zero-length value: %s", err)
+			}
+			vals := l.Entries[0].Entry.GetAttributeValues("seeAlso")
+			if len(vals) != 1 || vals[0] != "" {
+				t.Errorf("expected a single empty seeAlso value, got %#v", vals)
+			}
+		})
+	}
+}
+
+var ldifChangeThenContent = `dn: cn=a,dc=example,dc=org
+changetype: add
+cn: a
+
+dn: cn=b,dc=example,dc=org
+cn: b
+sn: b
+`
+
+// A record without a changetype must be parsed as a content entry regardless of
+// what the previous record's changetype was: the parser must not carry the
+// changetype across records.
+func TestLDIFChangeTypeNotLeaked(t *testing.T) {
+	l, err := ldif.Parse(ldifChangeThenContent)
+	if err != nil {
+		t.Fatalf("Failed to parse: %s", err)
+	}
+	if l.Entries[0].Add == nil {
+		t.Fatalf("first record should be an add request")
+	}
+	if l.Entries[1].Add != nil {
+		t.Errorf("changetype leaked: second record parsed as an add request")
+	}
+	if l.Entries[1].Entry == nil {
+		t.Fatalf("second record should be a content entry, not %#v", l.Entries[1])
+	}
+	if dn := l.Entries[1].Entry.DN; dn != "cn=b,dc=example,dc=org" {
+		t.Errorf("wrong dn on second entry: %q", dn)
+	}
+	if cn := l.Entries[1].Entry.GetAttributeValue("cn"); cn != "b" {
+		t.Errorf("wrong cn on second entry: %q", cn)
 	}
 }
 

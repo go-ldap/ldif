@@ -32,7 +32,6 @@ type Entry struct {
 type LDIF struct {
 	Entries    []*Entry
 	Version    int
-	changeType string
 	FoldWidth  int
 	Controls   bool
 	firstEntry bool
@@ -115,7 +114,6 @@ func unmarshalEntries(r io.Reader, l *LDIF) iter.Seq2[*Entry, error] {
 
 		curLine := 0
 		l.Version = 0
-		l.changeType = ""
 		isComment := false
 
 		reader := bufio.NewReader(r)
@@ -232,17 +230,18 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 		return nil, err
 	}
 
+	var changeType string
 	if strings.HasPrefix(lines[0], "changetype:") {
 		_, val, err := l.parseLine(lines[0])
 		if err != nil {
 			return nil, err
 		}
-		l.changeType = val
+		changeType = val
 		if len(lines) > 1 {
 			lines = lines[1:]
 		}
 	}
-	switch l.changeType {
+	switch changeType {
 	case "":
 		if len(controls) != 0 {
 			return nil, errors.New("controls found without changetype")
@@ -322,10 +321,10 @@ func (l *LDIF) parseEntry(lines []string) (entry *Entry, err error) {
 		return &Entry{Modify: mod}, nil
 
 	case "moddn", "modrdn":
-		return nil, fmt.Errorf("unsupported changetype %s", l.changeType)
+		return nil, fmt.Errorf("unsupported changetype %s", changeType)
 
 	default:
-		return nil, fmt.Errorf("invalid changetype %s", l.changeType)
+		return nil, fmt.Errorf("invalid changetype %s", changeType)
 	}
 }
 
@@ -355,17 +354,18 @@ func (l *LDIF) parseLine(line string) (attr, val string, err error) {
 		return
 	}
 
-	if off > len(line)-2 {
-		err = errors.New("empty value")
-		// FIXME: this is allowed for some attributes, e.g. seeAlso
-		return
-	}
-
 	attr = line[0:off]
 	if err = validAttr(attr); err != nil {
 		attr = ""
 		val = ""
 		return
+	}
+
+	// A line of the form "attr:" with nothing after the colon is a
+	// zero-length value, which RFC 2849 (note 5) requires to be supported
+	// (e.g. "seeAlso:").
+	if off == len(line)-1 {
+		return attr, "", nil
 	}
 
 	switch line[off+1] {
@@ -418,17 +418,14 @@ func (l *LDIF) parseControls(lines []string) ([]ldap.Control, []string, error) {
 
 		if len(parts) > 1 {
 			switch parts[1] {
-			case "true":
-				criticality = true
+			case "true", "false":
+				criticality = parts[1] == "true"
 				if len(parts) > 2 {
-					parts[1] = parts[2]
-					parts = parts[0:2]
-				}
-			case "false":
-				criticality = false
-				if len(parts) > 2 {
-					parts[1] = parts[2]
-					parts = parts[0:2]
+					// a controlValue follows the criticality token
+					parts = []string{parts[0], parts[2]}
+				} else {
+					// criticality only, no controlValue
+					parts = parts[:1]
 				}
 			}
 		}

@@ -1,8 +1,10 @@
 package ldif_test
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/go-ldap/ldap/v3"
 	"github.com/go-ldap/ldif"
 )
 
@@ -69,6 +71,44 @@ replace: postaladdress
 delete: description
 -
 `
+
+// A control made of an OID and an optional criticality flag but no
+// controlValue (e.g. "control: <oid>" or "control: <oid> true") must parse: the
+// "true"/"false" token must be read as the criticality, not as a controlValue.
+func TestParseControlCriticality(t *testing.T) {
+	const tmpl = `version: 1
+dn: ou=x,dc=example,dc=com
+control: 2.16.840.1.113730.3.4.2%s
+changetype: delete
+`
+	cases := map[string]struct {
+		suffix          string
+		wantCriticality bool
+	}{
+		"absent": {"", false},
+		"true":   {" true", true},
+		"false":  {" false", false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			l, err := ldif.ParseWithControls(fmt.Sprintf(tmpl, tc.suffix))
+			if err != nil {
+				t.Fatalf("failed to parse control: %s", err)
+			}
+			ctrls := l.Entries[0].Del.Controls
+			if len(ctrls) != 1 {
+				t.Fatalf("expected 1 control, got %d", len(ctrls))
+			}
+			c, ok := ctrls[0].(*ldap.ControlManageDsaIT)
+			if !ok {
+				t.Fatalf("expected *ldap.ControlManageDsaIT, got %T", ctrls[0])
+			}
+			if c.Criticality != tc.wantCriticality {
+				t.Errorf("criticality = %v, want %v", c.Criticality, tc.wantCriticality)
+			}
+		})
+	}
+}
 
 func TestLDIFParseRFC2849Example6(t *testing.T) {
 	l, err := ldif.Parse(ldifRFC2849Example6)

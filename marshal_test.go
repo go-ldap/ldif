@@ -2,6 +2,7 @@ package ldif_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -279,6 +280,56 @@ description:: VGhlIFBlw7ZwbGUgw5ZyZ2FuaXphdGlvbg==
 	}
 	if res != entryLDIF {
 		t.Errorf("unexpected result: >>%s<<\n", res)
+	}
+}
+
+func TestMarshalLeadingTrailingSpace(t *testing.T) {
+	// Values that begin or end with a space must be base64 encoded so they
+	// survive a round-trip (RFC 2849 SAFE-INIT-CHAR / note 8).
+	entry := &ldap.Entry{
+		DN: "uid=someone,dc=example,dc=org",
+		Attributes: []*ldap.EntryAttribute{
+			{Name: "description", Values: []string{" leading"}},
+			{Name: "title", Values: []string{"trailing "}},
+			{Name: "colon", Values: []string{":value"}},
+			{Name: "lt", Values: []string{"<value"}},
+		},
+	}
+	l := &ldif.LDIF{Entries: []*ldif.Entry{{Entry: entry}}}
+	out, err := ldif.Marshal(l)
+	if err != nil {
+		t.Fatalf("Failed to marshal: %s", err)
+	}
+	// The leading-space value must be emitted with the base64 marker "::" and
+	// the correct encoding, not verbatim.
+	if strings.Contains(out, "description:  leading") {
+		t.Errorf("leading-space value was emitted verbatim:\n%s", out)
+	}
+	for _, wantLine := range []string{
+		"description:: " + base64.StdEncoding.EncodeToString([]byte(" leading")),
+		"title:: " + base64.StdEncoding.EncodeToString([]byte("trailing ")),
+		"colon:: " + base64.StdEncoding.EncodeToString([]byte(":value")),
+		"lt:: " + base64.StdEncoding.EncodeToString([]byte("<value")),
+	} {
+		if !strings.Contains(out, wantLine) {
+			t.Errorf("expected %q in output, got:\n%s", wantLine, out)
+		}
+	}
+
+	l2, err := ldif.Parse(out)
+	if err != nil {
+		t.Fatalf("Failed to re-parse marshalled output: %s\n%s", err, out)
+	}
+	got := l2.Entries[0].Entry
+	for attr, want := range map[string]string{
+		"description": " leading",
+		"title":       "trailing ",
+		"colon":       ":value",
+		"lt":          "<value",
+	} {
+		if v := got.GetAttributeValue(attr); v != want {
+			t.Errorf("%s lost in round-trip: got %q, want %q", attr, v, want)
+		}
 	}
 }
 
