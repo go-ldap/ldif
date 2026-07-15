@@ -283,8 +283,7 @@ func foldLine(line string, fw int) (folded string) {
 // Dump writes the given entries to the io.Writer.
 //
 // The entries argument can be *ldap.Entry or a mix of *ldap.AddRequest,
-// *ldap.DelRequest, *ldap.ModifyRequest and *ldap.ModifyDNRequest or slices
-// of any of those.
+// *ldap.DelRequest and *ldap.ModifyRequest or slices of any of those.
 //
 // See Marshal() for the fw argument.
 func Dump(fh io.Writer, fw int, entries ...interface{}) error {
@@ -300,8 +299,7 @@ func Dump(fh io.Writer, fw int, entries ...interface{}) error {
 // ToLDIF puts the given arguments in an LDIF struct and returns it.
 //
 // The entries argument can be *ldap.Entry or a mix of *ldap.AddRequest,
-// *ldap.DelRequest, *ldap.ModifyRequest and *ldap.ModifyDNRequest or slices
-// of any of those.
+// *ldap.DelRequest and *ldap.ModifyRequest or slices of any of those.
 func ToLDIF(entries ...interface{}) (*LDIF, error) {
 	l := &LDIF{}
 	for _, e := range entries {
