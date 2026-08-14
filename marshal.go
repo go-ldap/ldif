@@ -303,37 +303,37 @@ func Dump(fh io.Writer, fw int, entries ...interface{}) error {
 func ToLDIF(entries ...interface{}) (*LDIF, error) {
 	l := &LDIF{}
 	for _, e := range entries {
-		switch e.(type) {
+		switch e := e.(type) {
 		case []*ldap.Entry:
-			for _, en := range e.([]*ldap.Entry) {
+			for _, en := range e {
 				l.Entries = append(l.Entries, &Entry{Entry: en})
 			}
 
 		case *ldap.Entry:
-			l.Entries = append(l.Entries, &Entry{Entry: e.(*ldap.Entry)})
+			l.Entries = append(l.Entries, &Entry{Entry: e})
 
 		case []*ldap.AddRequest:
-			for _, en := range e.([]*ldap.AddRequest) {
+			for _, en := range e {
 				l.Entries = append(l.Entries, &Entry{Add: en})
 			}
 
 		case *ldap.AddRequest:
-			l.Entries = append(l.Entries, &Entry{Add: e.(*ldap.AddRequest)})
+			l.Entries = append(l.Entries, &Entry{Add: e})
 
 		case []*ldap.DelRequest:
-			for _, en := range e.([]*ldap.DelRequest) {
+			for _, en := range e {
 				l.Entries = append(l.Entries, &Entry{Del: en})
 			}
 
 		case *ldap.DelRequest:
-			l.Entries = append(l.Entries, &Entry{Del: e.(*ldap.DelRequest)})
+			l.Entries = append(l.Entries, &Entry{Del: e})
 
 		case []*ldap.ModifyRequest:
-			for _, en := range e.([]*ldap.ModifyRequest) {
+			for _, en := range e {
 				l.Entries = append(l.Entries, &Entry{Modify: en})
 			}
 		case *ldap.ModifyRequest:
-			l.Entries = append(l.Entries, &Entry{Modify: e.(*ldap.ModifyRequest)})
+			l.Entries = append(l.Entries, &Entry{Modify: e})
 
 		default:
 			return nil, fmt.Errorf("unsupported type %T", e)

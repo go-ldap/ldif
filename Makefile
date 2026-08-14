@@ -28,14 +28,7 @@ fmt:
 vet:
 	go vet -vettool=$(which shadow) -atomic -bool -copylocks -nilfunc -printf -rangeloops -unreachable -unsafeptr -unusedresult .
 
-# https://github.com/golang/lint
-# go get github.com/golang/lint/golint
-# Capture output and force failure when there is non-empty output
+# https://staticcheck.dev/
+# go install honnef.co/go/tools/cmd/staticcheck@latest
 lint:
-	@echo golint ./...
-	@OUTPUT=`golint ./... 2>&1`; \
-	if [ "$$OUTPUT" ]; then \
-		echo "golint errors:"; \
-		echo "$$OUTPUT"; \
-		exit 1; \
-	fi
+	staticcheck ./...
